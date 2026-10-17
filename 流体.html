@@ -1,0 +1,3064 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>HYDRO//SPH — 3D Fluid Compute Benchmark</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0c0e;
+    --panel: #101315;
+    --panel-deep: #0c0f11;
+    --line: #242b2f;
+    --line-strong: #39444a;
+    --ink: #d3dadd;
+    --muted: #7d898f;
+    --faint: #4b565c;
+    --accent: #55ded1;
+    --accent-ink: #07110f;
+    --hot: #ff6548;
+    --bar: #20272a;
+    --mono: "SFMono-Regular", "Cascadia Mono", "Roboto Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  body {
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  button, input, output { font: inherit; }
+
+  #stage {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    z-index: 0;
+    cursor: grab;
+    touch-action: none;
+    outline: none;
+  }
+
+  #stage.dragging { cursor: grabbing; }
+
+  .vignette {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 70% 64% at 50% 43%, rgba(0, 0, 0, 0) 38%, rgba(0, 0, 0, 0.34) 100%),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0) 18%, rgba(0, 0, 0, 0) 78%, rgba(0, 0, 0, 0.22));
+  }
+
+  .panel {
+    position: fixed;
+    z-index: 6;
+    background: rgba(15, 18, 20, 0.965);
+    border: 1px solid var(--line);
+  }
+
+  .panel::before {
+    content: "";
+    position: absolute;
+    top: -1px;
+    left: -1px;
+    width: 74px;
+    height: 1px;
+    background: var(--accent);
+    pointer-events: none;
+  }
+
+  .panel-left {
+    top: 18px;
+    left: 18px;
+    width: 306px;
+    max-height: calc(100vh - 36px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+
+  .panel-left::-webkit-scrollbar { width: 4px; }
+  .panel-left::-webkit-scrollbar-track { background: transparent; }
+  .panel-left::-webkit-scrollbar-thumb { background: var(--line-strong); }
+
+  .panel-right {
+    top: 18px;
+    right: 18px;
+    width: 296px;
+    max-height: calc(100vh - 36px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+
+  .panel-right::-webkit-scrollbar { width: 4px; }
+  .panel-right::-webkit-scrollbar-track { background: transparent; }
+  .panel-right::-webkit-scrollbar-thumb { background: var(--line-strong); }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    min-height: 64px;
+    padding: 13px 15px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .brand-mark {
+    display: grid;
+    place-items: center;
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: -0.08em;
+  }
+
+  .brand-copy { min-width: 0; flex: 1; }
+
+  .brand h1 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0.14em;
+    white-space: nowrap;
+  }
+
+  .brand h1 span { color: var(--accent); }
+
+  .brand p {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 8px;
+    line-height: 1.2;
+    letter-spacing: 0.11em;
+    white-space: nowrap;
+  }
+
+  .revision {
+    flex: 0 0 auto;
+    align-self: flex-start;
+    color: var(--faint);
+    font-size: 8px;
+    line-height: 1.55;
+    letter-spacing: 0.08em;
+    text-align: right;
+  }
+
+  .throughput {
+    padding: 16px 15px 14px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel-deep);
+  }
+
+  .row-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--muted);
+    font-size: 8px;
+    letter-spacing: 0.14em;
+  }
+
+  .live {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--accent);
+    font-size: 8px;
+    letter-spacing: 0.1em;
+  }
+
+  .live i {
+    display: block;
+    width: 4px;
+    height: 4px;
+    background: var(--accent);
+  }
+
+  .fps-line {
+    display: flex;
+    align-items: baseline;
+    gap: 9px;
+    margin-top: 7px;
+  }
+
+  .fps-line strong {
+    color: var(--ink);
+    font-size: 46px;
+    font-weight: 400;
+    line-height: 0.98;
+    letter-spacing: -0.075em;
+  }
+
+  .fps-line span {
+    color: var(--muted);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+  }
+
+  .metric {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 8px 15px;
+    border-bottom: 1px solid #1b2225;
+  }
+
+  .metric:last-child { border-bottom: 0; }
+
+  .metric-key {
+    color: var(--muted);
+    font-size: 8px;
+    letter-spacing: 0.12em;
+    white-space: nowrap;
+  }
+
+  .metric-value {
+    color: var(--ink);
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .metric-value em {
+    color: var(--faint);
+    font-size: 8px;
+    font-style: normal;
+    letter-spacing: 0.08em;
+  }
+
+  .trace-wrap {
+    padding: 11px 15px 10px;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    background: var(--panel-deep);
+  }
+
+  .trace-head {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    color: var(--muted);
+    font-size: 8px;
+    letter-spacing: 0.11em;
+  }
+
+  #trace {
+    display: block;
+    width: 100%;
+    height: 38px;
+  }
+
+  .legend {
+    padding: 11px 15px 13px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .legend-head {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 7px;
+    color: var(--muted);
+    font-size: 8px;
+    letter-spacing: 0.11em;
+  }
+
+  .legend-bar {
+    height: 5px;
+    border: 1px solid #1a2124;
+    background: linear-gradient(90deg, #06205f 0%, #0a5c8d 28%, #1fd8dc 55%, #ffb05e 78%, #ff543b 100%);
+  }
+
+  .legend-scale {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    color: var(--faint);
+    font-size: 8px;
+    letter-spacing: 0.06em;
+  }
+
+  .panel-foot {
+    padding: 9px 15px 10px;
+    color: var(--faint);
+    font-size: 7px;
+    line-height: 1.5;
+    letter-spacing: 0.1em;
+  }
+
+  .right-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px 11px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel-deep);
+  }
+
+  .eyebrow {
+    color: var(--muted);
+    font-size: 8px;
+    letter-spacing: 0.15em;
+  }
+
+  .head-code {
+    color: var(--faint);
+    font-size: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  .controls { padding: 12px 14px 13px; }
+
+  .btn {
+    appearance: none;
+    -webkit-appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 36px;
+    padding: 8px 10px;
+    border: 1px solid var(--line-strong);
+    border-radius: 0;
+    background: transparent;
+    color: var(--ink);
+    font-size: 9px;
+    line-height: 1.2;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(85, 222, 209, 0.055);
+  }
+
+  .btn:active:not(:disabled) { background: rgba(85, 222, 209, 0.11); }
+
+  .btn:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .btn:disabled {
+    border-color: #20272b;
+    color: #485258;
+    cursor: not-allowed;
+    background: transparent;
+  }
+
+  .btn-accent {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 700;
+  }
+
+  .btn-accent:hover:not(:disabled) {
+    background: #83eee5;
+    border-color: #83eee5;
+    color: var(--accent-ink);
+  }
+
+  .btn-accent:disabled {
+    background: #1a2828;
+    border-color: #29403e;
+    color: #617472;
+  }
+
+  .btn-reset { margin-bottom: 14px; }
+
+  .control {
+    padding: 3px 0 12px;
+    border-bottom: 1px solid #1b2225;
+    margin-bottom: 10px;
+  }
+
+  .control:last-of-type { margin-bottom: 13px; }
+
+  .control-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .control-top label {
+    color: var(--muted);
+    font-size: 8px;
+    letter-spacing: 0.13em;
+  }
+
+  .control-value {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    color: var(--ink);
+    font-size: 11px;
+  }
+
+  .control-value em {
+    color: var(--faint);
+    font-size: 8px;
+    font-style: normal;
+    letter-spacing: 0.04em;
+  }
+
+  input[type="range"] {
+    --pct: 40%;
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    height: 20px;
+    margin: 7px 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: linear-gradient(90deg, var(--accent) 0 var(--pct), #2a3236 var(--pct) 100%) center / 100% 2px no-repeat;
+    cursor: ew-resize;
+  }
+
+  input[type="range"]:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  input[type="range"]:disabled { cursor: not-allowed; opacity: 0.38; }
+
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 2px;
+    background: transparent;
+    border: 0;
+  }
+
+  input[type="range"]::-moz-range-track {
+    height: 2px;
+    background: transparent;
+    border: 0;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 8px;
+    height: 16px;
+    margin-top: -7px;
+    border: 1px solid #d8fffb;
+    border-radius: 0;
+    background: var(--accent);
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 8px;
+    height: 16px;
+    border: 1px solid #d8fffb;
+    border-radius: 0;
+    background: var(--accent);
+  }
+
+  .range-scale {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2px;
+    color: var(--faint);
+    font-size: 7px;
+    letter-spacing: 0.04em;
+  }
+
+  .benchmark {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+  }
+
+  .section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .badge {
+    padding: 3px 5px 2px;
+    border: 1px solid #2b3438;
+    color: var(--faint);
+    font-size: 7px;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+
+  .bench-desc {
+    margin: 8px 0 10px;
+    color: var(--faint);
+    font-size: 7px;
+    line-height: 1.65;
+    letter-spacing: 0.04em;
+  }
+
+  .bench-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 15px;
+    color: var(--muted);
+    font-size: 8px;
+    letter-spacing: 0.06em;
+  }
+
+  .status-dot {
+    width: 5px;
+    height: 5px;
+    flex: 0 0 5px;
+    background: var(--faint);
+  }
+
+  .status-dot[data-state="running"] { background: var(--accent); }
+  .status-dot[data-state="complete"] { background: var(--accent); }
+  .status-dot[data-state="error"] { background: var(--hot); }
+
+  #benchStatus { color: var(--ink); }
+
+  #benchDetail {
+    margin-left: auto;
+    color: var(--faint);
+    text-align: right;
+  }
+
+  .progress {
+    height: 3px;
+    margin: 8px 0 10px;
+    background: var(--bar);
+    overflow: hidden;
+  }
+
+  .progress i {
+    display: block;
+    width: 0%;
+    height: 100%;
+    background: var(--accent);
+    transition: width 120ms linear;
+  }
+
+  .progress[data-state="error"] i { background: var(--hot); }
+
+  .export-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    margin-top: 7px;
+  }
+
+  .export-row .btn { min-height: 32px; font-size: 8px; }
+
+  .last-run {
+    margin-top: 10px;
+    padding: 8px 9px 7px;
+    border: 1px solid #263035;
+    background: var(--panel-deep);
+  }
+
+  .last-run[hidden] { display: none; }
+
+  .last-run-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 7px;
+    color: var(--faint);
+    font-size: 7px;
+    letter-spacing: 0.08em;
+  }
+
+  .last-run-head b {
+    color: var(--accent);
+    font-weight: 400;
+  }
+
+  .result-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 10px;
+  }
+
+  .result-grid span {
+    color: var(--muted);
+    font-size: 7px;
+    letter-spacing: 0.05em;
+  }
+
+  .result-grid b {
+    color: var(--ink);
+    font-size: 9px;
+    font-weight: 400;
+    text-align: right;
+  }
+
+  .result-grid .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    min-width: 0;
+  }
+
+  .bench-note {
+    margin: 9px 0 0;
+    color: var(--faint);
+    font-size: 7px;
+    line-height: 1.65;
+    letter-spacing: 0.02em;
+  }
+
+  .seed-lines {
+    display: grid;
+    gap: 4px;
+    margin-top: 13px;
+    padding-top: 10px;
+    border-top: 1px solid #1b2225;
+  }
+
+  .seed-line {
+    display: flex;
+    justify-content: space-between;
+    color: var(--faint);
+    font-size: 7px;
+    letter-spacing: 0.06em;
+  }
+
+  .seed-line span:last-child { color: var(--muted); }
+
+  .viewport-hint,
+  .build-tag {
+    position: fixed;
+    bottom: 16px;
+    z-index: 4;
+    color: #505b61;
+    font-size: 8px;
+    line-height: 1;
+    letter-spacing: 0.1em;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  .viewport-hint { left: 20px; }
+  .build-tag { right: 20px; text-align: right; }
+
+  .viewport-hint span {
+    display: inline-block;
+    margin: 0 7px;
+    color: #30393d;
+  }
+
+  #boot {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #090b0c;
+    transition: opacity 360ms ease, visibility 360ms ease;
+  }
+
+  #boot.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .boot-core {
+    width: min(440px, calc(100vw - 48px));
+    padding: 0 1px 1px;
+  }
+
+  .boot-kicker {
+    color: var(--faint);
+    font-size: 8px;
+    letter-spacing: 0.18em;
+  }
+
+  .boot-title {
+    margin-top: 12px;
+    color: var(--ink);
+    font-size: clamp(24px, 5vw, 40px);
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: -0.055em;
+  }
+
+  .boot-title span { color: var(--accent); }
+
+  .boot-rule {
+    position: relative;
+    height: 1px;
+    margin: 18px 0 13px;
+    background: #222a2d;
+    overflow: hidden;
+  }
+
+  .boot-rule span {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 28%;
+    height: 1px;
+    background: var(--accent);
+    animation: boot-sweep 1.15s linear infinite;
+  }
+
+  @keyframes boot-sweep {
+    0% { transform: translateX(-110%); }
+    100% { transform: translateX(470%); }
+  }
+
+  .boot-msg {
+    min-height: 14px;
+    color: var(--muted);
+    font-size: 8px;
+    letter-spacing: 0.11em;
+  }
+
+  #boot.error .boot-msg { color: var(--hot); }
+  #boot.error .boot-rule span { background: var(--hot); animation: none; width: 100%; transform: none; }
+
+  .boot-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 28px;
+    padding-top: 9px;
+    border-top: 1px solid #1b2225;
+    color: var(--faint);
+    font-size: 7px;
+    letter-spacing: 0.08em;
+  }
+
+  .boot-meta span:last-child { text-align: right; }
+
+  .noscript {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: grid;
+    place-items: center;
+    background: #090b0c;
+    color: var(--hot);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+  }
+
+  @media (max-width: 1040px) {
+    .panel-left { width: 284px; left: 12px; top: 12px; }
+    .panel-right { width: 282px; right: 12px; top: 12px; max-height: calc(100vh - 24px); }
+    .fps-line strong { font-size: 40px; }
+    .metric { padding-left: 12px; padding-right: 12px; }
+    .brand, .throughput, .trace-wrap, .legend, .panel-foot { padding-left: 12px; padding-right: 12px; }
+    .viewport-hint, .build-tag { bottom: 10px; }
+    .viewport-hint { left: 14px; }
+    .build-tag { right: 14px; }
+  }
+
+  @media (max-width: 760px) {
+    .panel-left {
+      top: 10px;
+      left: 10px;
+      width: 216px;
+    }
+    .brand { min-height: 50px; padding: 9px 10px; }
+    .brand-mark { display: none; }
+    .brand h1 { font-size: 11px; }
+    .brand p, .revision, .trace-wrap, .legend, .panel-foot { display: none; }
+    .throughput { padding: 11px 10px 10px; }
+    .fps-line strong { font-size: 32px; }
+    .metric { padding: 6px 10px; }
+    .metric-key { font-size: 7px; }
+    .metric-value { font-size: 9px; }
+    .metric:nth-child(4), .metric:nth-child(5) { display: none; }
+    .panel-right {
+      top: auto;
+      bottom: 10px;
+      left: 10px;
+      right: 10px;
+      width: auto;
+      max-height: 44vh;
+    }
+    .controls { padding: 10px 12px 12px; }
+    .bench-note, .seed-lines { display: none; }
+    .viewport-hint, .build-tag { display: none; }
+    #trace { height: 28px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .boot-rule span { animation: none; }
+    .progress i { transition: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="stage" aria-label="实时三维 SPH 流体粒子仿真视图"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<aside class="panel panel-left" aria-label="实时性能数据">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">H//S</div>
+    <div class="brand-copy">
+      <h1>HYDRO<span>//</span>SPH</h1>
+      <p>POSITION-BASED FLUID COMPUTE</p>
+    </div>
+    <div class="revision">R01<br>WEBGL2</div>
+  </div>
+
+  <div class="throughput">
+    <div class="row-label">
+      <span>LIVE THROUGHPUT</span>
+      <span class="live"><i aria-hidden="true"></i>LIVE</span>
+    </div>
+    <div class="fps-line">
+      <strong id="fpsValue">--.-</strong>
+      <span>FPS</span>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric">
+      <span class="metric-key">FRAME AVG</span>
+      <span class="metric-value"><b id="frameMs">--.--</b> <em>MS</em></span>
+    </div>
+    <div class="metric">
+      <span class="metric-key">PHYSICS AVG</span>
+      <span class="metric-value"><b id="physicsMs">--.--</b> <em>MS</em></span>
+    </div>
+    <div class="metric">
+      <span class="metric-key">ACTIVE PARTICLES</span>
+      <span class="metric-value"><b id="particleCount">4,000</b></span>
+    </div>
+    <div class="metric">
+      <span class="metric-key">SOLVER</span>
+      <span class="metric-value"><b>PBF</b> <em>120 HZ / 4 ITER</em></span>
+    </div>
+    <div class="metric">
+      <span class="metric-key">SIM TIME</span>
+      <span class="metric-value"><b id="simTime">00:00.00</b></span>
+    </div>
+  </div>
+
+  <div class="trace-wrap">
+    <div class="trace-head">
+      <span>FRAME TRACE</span>
+      <span>LAST 90 / MS</span>
+    </div>
+    <canvas id="trace" width="560" height="76" aria-label="帧时间曲线"></canvas>
+  </div>
+
+  <div class="legend">
+    <div class="legend-head">
+      <span>VELOCITY / COMPRESSION</span>
+      <span>LIVE COLOR MAP</span>
+    </div>
+    <div class="legend-bar" aria-hidden="true"></div>
+    <div class="legend-scale">
+      <span>0.0 M/S</span>
+      <span>IMPACT</span>
+      <span>4.5+ M/S</span>
+    </div>
+  </div>
+  <div class="panel-foot">POLY6 DENSITY · SPIKY GRADIENT · SPATIAL HASH / 3375 CELLS</div>
+</aside>
+
+<aside class="panel panel-right" aria-label="仿真与基准控制">
+  <div class="right-head">
+    <span class="eyebrow">CONTROL SURFACE</span>
+    <span class="head-code">01 / 03</span>
+  </div>
+
+  <div class="controls">
+    <button type="button" class="btn btn-reset" id="resetBtn">RESET FLUID STATE</button>
+
+    <div class="control">
+      <div class="control-top">
+        <label for="gravity">GRAVITY</label>
+        <span class="control-value"><output id="gravityValue" for="gravity">9.81</output><em>M/S²</em></span>
+      </div>
+      <input id="gravity" type="range" min="0" max="24" step="0.01" value="9.81" aria-label="重力大小">
+      <div class="range-scale"><span>0.00</span><span>24.00</span></div>
+    </div>
+
+    <div class="control">
+      <div class="control-top">
+        <label for="viscosity">VISCOSITY</label>
+        <span class="control-value"><output id="viscosityValue" for="viscosity">0.16</output><em>COEFF</em></span>
+      </div>
+      <input id="viscosity" type="range" min="0" max="1" step="0.01" value="0.16" aria-label="流体粘滞度">
+      <div class="range-scale"><span>INVISCID</span><span>DENSE</span></div>
+    </div>
+
+    <section class="benchmark" aria-label="固定负载基准测试">
+      <div class="section-head">
+        <span class="eyebrow">BENCHMARK / FIXED</span>
+        <span class="badge">120 + 600 FR</span>
+      </div>
+      <p class="bench-desc">CANONICAL SEED · 120 FRAME WARM-UP · 600 FRAME SAMPLE · 2 SUBSTEPS / FRAME</p>
+
+      <div class="bench-status">
+        <i class="status-dot" id="benchDot" data-state="idle" aria-hidden="true"></i>
+        <span id="benchStatus">IDLE</span>
+        <span id="benchDetail">READY</span>
+      </div>
+      <div class="progress" id="benchProgressWrap" data-state="idle" aria-hidden="true">
+        <i id="benchProgress"></i>
+      </div>
+
+      <button type="button" class="btn btn-accent" id="runBenchBtn">RUN BENCHMARK</button>
+
+      <div class="export-row">
+        <button type="button" class="btn" id="exportJsonBtn" disabled>EXPORT JSON</button>
+        <button type="button" class="btn" id="exportCsvBtn" disabled>EXPORT CSV</button>
+      </div>
+
+      <div class="last-run" id="lastRun" hidden>
+        <div class="last-run-head">
+          <span>LAST RESULT / <b id="resultRunId">--</b></span>
+          <span id="resultAnomalies">ANOM 0</span>
+        </div>
+        <div class="result-grid">
+          <div class="row"><span>AVG FRAME</span><b id="resultAvgFrame">--</b></div>
+          <div class="row"><span>P95 FRAME</span><b id="resultP95Frame">--</b></div>
+          <div class="row"><span>AVG PHYS</span><b id="resultAvgPhysics">--</b></div>
+          <div class="row"><span>AVG FPS</span><b id="resultFps">--</b></div>
+          <div class="row"><span>DURATION</span><b id="resultDuration">--</b></div>
+          <div class="row"><span>PARTICLES</span><b id="resultParticles">--</b></div>
+        </div>
+      </div>
+
+      <p class="bench-note">The run locks seed, gravity, viscosity, camera and viewport. Switching tabs or resizing aborts the sample to preserve workload integrity.</p>
+    </section>
+
+    <div class="seed-lines">
+      <div class="seed-line"><span>SEED</span><span>0x5EED1201</span></div>
+      <div class="seed-line"><span>VESSEL</span><span>1.400 M CUBE</span></div>
+      <div class="seed-line"><span>INTEGRATOR</span><span>FIXED 1/120 S</span></div>
+    </div>
+  </div>
+</aside>
+
+<div class="viewport-hint" aria-hidden="true">DRAG ORBIT<span>/</span>WHEEL DOLLY<span>/</span>R RESET VIEW</div>
+<div class="build-tag" aria-hidden="true">NATIVE WEBGL2 / SPH CORE 01 / 4000 PARTICLES</div>
+
+<div id="boot" role="status" aria-live="polite">
+  <div class="boot-core">
+    <div class="boot-kicker">REALTIME COMPUTE INSTRUMENT</div>
+    <div class="boot-title">HYDRO<span>//</span>SPH</div>
+    <div class="boot-rule"><span></span></div>
+    <div class="boot-msg" id="bootMsg">INITIALIZING WEBGL2 CONTEXT</div>
+    <div class="boot-meta">
+      <span>PARTICLES 4000</span>
+      <span>SEED 5EED1201</span>
+      <span>BUILD 01</span>
+    </div>
+  </div>
+</div>
+
+<noscript><div class="noscript">JAVASCRIPT REQUIRED / ENABLE SCRIPTING</div></noscript>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------------------------------------------------------------------------
+  // Configuration and deterministic setup
+  // ---------------------------------------------------------------------------
+
+  const CFG = {
+    seed: 0x5EED1201,
+    particleCount: 4000,
+    latticeX: 20,
+    latticeY: 10,
+    latticeZ: 20,
+    spacing: 0.060,
+    startY: 0.760,
+    containerSize: 1.400,
+    wallMargin: 0.026,
+    smoothingRadius: 0.100,
+    fixedDt: 1 / 120,
+    maxSubsteps: 4,
+    solverIterations: 4,
+    solverRelaxation: 0.92,
+    maxCorrection: 0.048,
+    maxSpeed: 14.0,
+    restitution: 0.14,
+    contactRestitutionThreshold: 0.22,
+    wallFriction: 0.972,
+    gravityDefault: 9.81,
+    viscosityDefault: 0.16,
+    viscosityGain: 0.40,
+    renderDiameter: 0.054,
+    minConstraint: 0,
+    benchmarkWarmup: 120,
+    benchmarkSamples: 600,
+    benchmarkSubsteps: 2,
+    benchmarkGravity: 9.81,
+    benchmarkViscosity: 0.16,
+    longFrameMs: 50,
+    fovY: 32 * Math.PI / 180
+  };
+
+  const N = CFG.particleCount;
+  const HALF = CFG.containerSize * 0.5;
+  const CEILING = CFG.containerSize;
+  const MARGIN = CFG.wallMargin;
+  const MIN_X = -HALF + MARGIN;
+  const MAX_X = HALF - MARGIN;
+  const MIN_Y = MARGIN;
+  const MAX_Y = CEILING - MARGIN;
+  const MIN_Z = -HALF + MARGIN;
+  const MAX_Z = HALF - MARGIN;
+  const H = CFG.smoothingRadius;
+  const H2 = H * H;
+
+  const POLY6_COEF = 315 / (64 * Math.PI * Math.pow(H, 9));
+  const SPIKY_COEF = 45 / (Math.PI * Math.pow(H, 6));
+  const W_SELF = POLY6_COEF * Math.pow(H, 6);
+
+  const $ = (id) => document.getElementById(id);
+  const clamp = (v, lo, hi) => v < lo ? lo : (v > hi ? hi : v);
+  const mix = (a, b, t) => a + (b - a) * t;
+  const smoothstep = (a, b, x) => {
+    const t = clamp((x - a) / (b - a), 0, 1);
+    return t * t * (3 - 2 * t);
+  };
+
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function random() {
+      a = (a + 0x6D2B79F5) | 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), 1 | t);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function latticeRestDensity(spacing, radius) {
+    const coef = 315 / (64 * Math.PI * Math.pow(radius, 9));
+    const r2Max = radius * radius;
+    const steps = Math.ceil(radius / spacing) + 1;
+    let sum = 0;
+    for (let ix = -steps; ix <= steps; ix++) {
+      for (let iy = -steps; iy <= steps; iy++) {
+        for (let iz = -steps; iz <= steps; iz++) {
+          const r2 = spacing * spacing * (ix * ix + iy * iy + iz * iz);
+          if (r2 >= r2Max) continue;
+          const d = r2Max - r2;
+          sum += coef * d * d * d;
+        }
+      }
+    }
+    return sum;
+  }
+
+  const REST_DENSITY = latticeRestDensity(CFG.spacing, H);
+  const INV_REST = 1 / REST_DENSITY;
+  const HALF_CELL_OFFSETS = [];
+  for (let dz = -1; dz <= 1; dz++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx > 0 || (dx === 0 && dy > 0) || (dx === 0 && dy === 0 && dz > 0)) {
+          HALF_CELL_OFFSETS.push([dx, dy, dz]);
+        }
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 3x3 / 4x4 matrix helpers (column-major, WebGL layout)
+  // ---------------------------------------------------------------------------
+
+  function perspective(out, fovY, aspect, near, far) {
+    const f = 1 / Math.tan(fovY * 0.5);
+    const nf = 1 / (near - far);
+    out[0] = f / aspect; out[1] = 0; out[2] = 0; out[3] = 0;
+    out[4] = 0; out[5] = f; out[6] = 0; out[7] = 0;
+    out[8] = 0; out[9] = 0; out[10] = (far + near) * nf; out[11] = -1;
+    out[12] = 0; out[13] = 0; out[14] = 2 * far * near * nf; out[15] = 0;
+    return out;
+  }
+
+  function lookAt(out, eye, target, up) {
+    let zx = eye[0] - target[0];
+    let zy = eye[1] - target[1];
+    let zz = eye[2] - target[2];
+    let len = Math.hypot(zx, zy, zz) || 1;
+    zx /= len; zy /= len; zz /= len;
+
+    let xx = up[1] * zz - up[2] * zy;
+    let xy = up[2] * zx - up[0] * zz;
+    let xz = up[0] * zy - up[1] * zx;
+    len = Math.hypot(xx, xy, xz) || 1;
+    xx /= len; xy /= len; xz /= len;
+
+    const yx = zy * xz - zz * xy;
+    const yy = zz * xx - zx * xz;
+    const yz = zx * xy - zy * xx;
+
+    out[0] = xx; out[1] = yx; out[2] = zx; out[3] = 0;
+    out[4] = xy; out[5] = yy; out[6] = zy; out[7] = 0;
+    out[8] = xz; out[9] = yz; out[10] = zz; out[11] = 0;
+    out[12] = -(xx * eye[0] + xy * eye[1] + xz * eye[2]);
+    out[13] = -(yx * eye[0] + yy * eye[1] + yz * eye[2]);
+    out[14] = -(zx * eye[0] + zy * eye[1] + zz * eye[2]);
+    out[15] = 1;
+    return out;
+  }
+
+  function multiplyMat4(out, a, b) {
+    for (let c = 0; c < 4; c++) {
+      const b0 = b[c * 4 + 0];
+      const b1 = b[c * 4 + 1];
+      const b2 = b[c * 4 + 2];
+      const b3 = b[c * 4 + 3];
+      out[c * 4 + 0] = a[0] * b0 + a[4] * b1 + a[8] * b2 + a[12] * b3;
+      out[c * 4 + 1] = a[1] * b0 + a[5] * b1 + a[9] * b2 + a[13] * b3;
+      out[c * 4 + 2] = a[2] * b0 + a[6] * b1 + a[10] * b2 + a[14] * b3;
+      out[c * 4 + 3] = a[3] * b0 + a[7] * b1 + a[11] * b2 + a[15] * b3;
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Native PBF/SPH solver
+  // ---------------------------------------------------------------------------
+
+  class SPHFluid {
+    constructor(config) {
+      this.iterations = config.solverIterations;
+      this.relaxation = config.solverRelaxation;
+      this.maxCorrection = config.maxCorrection;
+      this.maxSpeed = config.maxSpeed;
+
+      this.posX = new Float32Array(N);
+      this.posY = new Float32Array(N);
+      this.posZ = new Float32Array(N);
+      this.velX = new Float32Array(N);
+      this.velY = new Float32Array(N);
+      this.velZ = new Float32Array(N);
+
+      this.predX = new Float32Array(N);
+      this.predY = new Float32Array(N);
+      this.predZ = new Float32Array(N);
+
+      this.density = new Float32Array(N);
+      this.lambda = new Float32Array(N);
+      this.deltaX = new Float32Array(N);
+      this.deltaY = new Float32Array(N);
+      this.deltaZ = new Float32Array(N);
+      this.gradX = new Float32Array(N);
+      this.gradY = new Float32Array(N);
+      this.gradZ = new Float32Array(N);
+      this.gradSq = new Float32Array(N);
+
+      this.smoothX = new Float32Array(N);
+      this.smoothY = new Float32Array(N);
+      this.smoothZ = new Float32Array(N);
+      this.viscWeight = new Float32Array(N);
+
+      this.renderPositions = new Float32Array(N * 3);
+      this.renderColors = new Float32Array(N * 3);
+
+      this.gridNX = Math.max(2, Math.ceil(config.containerSize / H) + 1);
+      this.gridNY = this.gridNX;
+      this.gridNZ = this.gridNX;
+      this.gridCellCount = this.gridNX * this.gridNY * this.gridNZ;
+      this.gridOriginX = -HALF;
+      this.gridOriginY = 0;
+      this.gridOriginZ = -HALF;
+      this.gridInvCell = 1 / H;
+      this.cellOf = new Int32Array(N);
+      this.cellCounts = new Int32Array(this.gridCellCount);
+      this.cellStarts = new Int32Array(this.gridCellCount + 1);
+      this.cellCursor = new Int32Array(this.gridCellCount);
+      this.ordered = new Int32Array(N);
+      this.maxPairs = N * 96;
+      this.pairA = new Int32Array(this.maxPairs);
+      this.pairB = new Int32Array(this.maxPairs);
+      this.pairGradX = new Float32Array(this.maxPairs);
+      this.pairGradY = new Float32Array(this.maxPairs);
+      this.pairGradZ = new Float32Array(this.maxPairs);
+      this.pairCount = 0;
+
+      this.time = 0;
+      this.lastMaxSpeed = 0;
+      this.lastPeakDensity = 1;
+      this.totalSteps = 0;
+      this.anomalyCounts = {
+        nonFinite: 0,
+        escapes: 0,
+        speedClamps: 0,
+        neighborOverflow: 0
+      };
+
+      this.reset(config.seed);
+    }
+
+    reset(seed) {
+      const rand = mulberry32(seed);
+      const nx = CFG.latticeX;
+      const ny = CFG.latticeY;
+      const nz = CFG.latticeZ;
+      const spacing = CFG.spacing;
+      const originX = -(nx - 1) * spacing * 0.5;
+      const originZ = -(nz - 1) * spacing * 0.5;
+      const jitter = 0.0022;
+
+      for (let y = 0; y < ny; y++) {
+        for (let z = 0; z < nz; z++) {
+          for (let x = 0; x < nx; x++) {
+            const i = (y * nz + z) * nx + x;
+            this.posX[i] = originX + x * spacing + (rand() - 0.5) * jitter;
+            this.posY[i] = CFG.startY + y * spacing + (rand() - 0.5) * jitter;
+            this.posZ[i] = originZ + z * spacing + (rand() - 0.5) * jitter;
+            this.velX[i] = 0;
+            this.velY[i] = 0;
+            this.velZ[i] = 0;
+            this.predX[i] = this.posX[i];
+            this.predY[i] = this.posY[i];
+            this.predZ[i] = this.posZ[i];
+            this.density[i] = REST_DENSITY;
+            this.lambda[i] = 0;
+            this.renderPositions[i * 3] = this.posX[i];
+            this.renderPositions[i * 3 + 1] = this.posY[i];
+            this.renderPositions[i * 3 + 2] = this.posZ[i];
+            this.renderColors[i * 3] = 0.02;
+            this.renderColors[i * 3 + 1] = 0.08;
+            this.renderColors[i * 3 + 2] = 0.36;
+          }
+        }
+      }
+
+      this.pairCount = 0;
+      this.cellCounts.fill(0);
+      this.time = 0;
+      this.lastMaxSpeed = 0;
+      this.lastPeakDensity = 1;
+      this.totalSteps = 0;
+      this.anomalyCounts.nonFinite = 0;
+      this.anomalyCounts.escapes = 0;
+      this.anomalyCounts.speedClamps = 0;
+      this.anomalyCounts.neighborOverflow = 0;
+    }
+
+    buildPairs() {
+      // Scan the local cell plus a 13-cell half stencil. Each interacting pair is
+      // emitted exactly once, regardless of which particle owns it.
+      const px = this.predX;
+      const py = this.predY;
+      const pz = this.predZ;
+      const counts = this.cellCounts;
+      const starts = this.cellStarts;
+      const cursor = this.cellCursor;
+      const cellOf = this.cellOf;
+      const ordered = this.ordered;
+      const pairA = this.pairA;
+      const pairB = this.pairB;
+      const maxPairs = this.maxPairs;
+      const nx = this.gridNX;
+      const ny = this.gridNY;
+      const nz = this.gridNZ;
+      const invCell = this.gridInvCell;
+      const ox = this.gridOriginX;
+      const oy = this.gridOriginY;
+      const oz = this.gridOriginZ;
+      const offsets = HALF_CELL_OFFSETS;
+
+      counts.fill(0);
+      for (let i = 0; i < N; i++) {
+        const cx = clamp(((px[i] - ox) * invCell) | 0, 0, nx - 1);
+        const cy = clamp(((py[i] - oy) * invCell) | 0, 0, ny - 1);
+        const cz = clamp(((pz[i] - oz) * invCell) | 0, 0, nz - 1);
+        const c = (cy * nz + cz) * nx + cx;
+        cellOf[i] = c;
+        counts[c]++;
+      }
+
+      let offset = 0;
+      for (let c = 0; c < this.gridCellCount; c++) {
+        starts[c] = offset;
+        const n = counts[c];
+        cursor[c] = offset;
+        offset += n;
+      }
+      starts[this.gridCellCount] = offset;
+
+      for (let i = 0; i < N; i++) {
+        const c = cellOf[i];
+        ordered[cursor[c]++] = i;
+      }
+
+      let pairCount = 0;
+      let overflow = 0;
+      for (let i = 0; i < N; i++) {
+        const xi = px[i];
+        const yi = py[i];
+        const zi = pz[i];
+        const cx = clamp(((xi - ox) * invCell) | 0, 0, nx - 1);
+        const cy = clamp(((yi - oy) * invCell) | 0, 0, ny - 1);
+        const cz = clamp(((zi - oz) * invCell) | 0, 0, nz - 1);
+
+        const own = (cy * nz + cz) * nx + cx;
+        let end = starts[own] + counts[own];
+        for (let k = starts[own]; k < end; k++) {
+          const j = ordered[k];
+          if (j <= i) continue;
+          const dx = xi - px[j];
+          const dy = yi - py[j];
+          const dz = zi - pz[j];
+          const r2 = dx * dx + dy * dy + dz * dz;
+          if (r2 < H2) {
+            if (pairCount < maxPairs) {
+              pairA[pairCount] = i;
+              pairB[pairCount] = j;
+              pairCount++;
+            } else {
+              overflow++;
+            }
+          }
+        }
+
+        for (let oi = 0; oi < offsets.length; oi++) {
+          const o = offsets[oi];
+          const xx = cx + o[0];
+          const yy = cy + o[1];
+          const zz = cz + o[2];
+          if (xx < 0 || xx >= nx || yy < 0 || yy >= ny || zz < 0 || zz >= nz) continue;
+          const c = (yy * nz + zz) * nx + xx;
+          end = starts[c] + counts[c];
+          for (let k = starts[c]; k < end; k++) {
+            const j = ordered[k];
+            const dx = xi - px[j];
+            const dy = yi - py[j];
+            const dz = zi - pz[j];
+            const r2 = dx * dx + dy * dy + dz * dz;
+            if (r2 < H2) {
+              if (pairCount < maxPairs) {
+                pairA[pairCount] = i;
+                pairB[pairCount] = j;
+                pairCount++;
+              } else {
+                overflow++;
+              }
+            }
+          }
+        }
+      }
+
+      this.pairCount = pairCount;
+      if (overflow > 0) this.anomalyCounts.neighborOverflow += 1;
+    }
+
+    computeDensityAndLambda() {
+      // Poly6 density + Spiky gradient. Lambda is the Lagrange multiplier of
+      // the PBF density constraint C = rho / rho0 - 1.
+      const px = this.predX;
+      const py = this.predY;
+      const pz = this.predZ;
+      const pairA = this.pairA;
+      const pairB = this.pairB;
+      const pairCount = this.pairCount;
+      const density = this.density;
+      const lambda = this.lambda;
+      const gradX = this.gradX;
+      const gradY = this.gradY;
+      const gradZ = this.gradZ;
+      const gradSq = this.gradSq;
+      const pairGradX = this.pairGradX;
+      const pairGradY = this.pairGradY;
+      const pairGradZ = this.pairGradZ;
+      const invRest = INV_REST;
+      const h2 = H2;
+      const h = H;
+      const poly6 = POLY6_COEF;
+      const spiky = SPIKY_COEF;
+      const minC = CFG.minConstraint;
+
+      density.fill(W_SELF);
+      gradX.fill(0);
+      gradY.fill(0);
+      gradZ.fill(0);
+      gradSq.fill(0);
+
+      for (let p = 0; p < pairCount; p++) {
+        const i = pairA[p];
+        const j = pairB[p];
+        const dx = px[i] - px[j];
+        const dy = py[i] - py[j];
+        const dz = pz[i] - pz[j];
+        const r2 = dx * dx + dy * dy + dz * dz;
+        if (r2 >= h2) {
+          pairGradX[p] = 0;
+          pairGradY[p] = 0;
+          pairGradZ[p] = 0;
+          continue;
+        }
+
+        const diff = h2 - r2;
+        const w = poly6 * diff * diff * diff;
+        density[i] += w;
+        density[j] += w;
+
+        const r = Math.sqrt(r2);
+        if (r > 1e-7) {
+          const q = h - r;
+          const grad = -spiky * q * q / r;
+          const gx = grad * dx;
+          const gy = grad * dy;
+          const gz = grad * dz;
+          pairGradX[p] = gx;
+          pairGradY[p] = gy;
+          pairGradZ[p] = gz;
+          const gsq = gx * gx + gy * gy + gz * gz;
+          gradX[i] += gx;
+          gradY[i] += gy;
+          gradZ[i] += gz;
+          gradSq[i] += gsq;
+          gradX[j] -= gx;
+          gradY[j] -= gy;
+          gradZ[j] -= gz;
+          gradSq[j] += gsq;
+        } else {
+          pairGradX[p] = 0;
+          pairGradY[p] = 0;
+          pairGradZ[p] = 0;
+        }
+      }
+
+      const invRest2 = invRest * invRest;
+      for (let i = 0; i < N; i++) {
+        let c = density[i] * invRest - 1;
+        // Use a one-sided density constraint: resist compression, never pull
+        // under-dense free-surface particles inward.
+        if (c < minC) c = minC;
+        const gx = gradX[i];
+        const gy = gradY[i];
+        const gz = gradZ[i];
+        const denom = (gradSq[i] + gx * gx + gy * gy + gz * gz) * invRest2 + 1e-8;
+        lambda[i] = -c / denom;
+      }
+    }
+
+    applyDensityCorrection() {
+      // The gradient of every pair was cached by the density pass immediately
+      // above, so projection does not repeat the square root or kernel gradient.
+      const pairA = this.pairA;
+      const pairB = this.pairB;
+      const pairCount = this.pairCount;
+      const pairGradX = this.pairGradX;
+      const pairGradY = this.pairGradY;
+      const pairGradZ = this.pairGradZ;
+      const lambda = this.lambda;
+      const dX = this.deltaX;
+      const dY = this.deltaY;
+      const dZ = this.deltaZ;
+      const invRest = INV_REST;
+      const relax = this.relaxation;
+      const maxCorr = this.maxCorrection;
+      const px = this.predX;
+      const py = this.predY;
+      const pz = this.predZ;
+
+      dX.fill(0);
+      dY.fill(0);
+      dZ.fill(0);
+
+      for (let p = 0; p < pairCount; p++) {
+        const gx = pairGradX[p];
+        const gy = pairGradY[p];
+        const gz = pairGradZ[p];
+        if (gx === 0 && gy === 0 && gz === 0) continue;
+
+        const i = pairA[p];
+        const j = pairB[p];
+        const w = (lambda[i] + lambda[j]) * invRest;
+        const cx = w * gx;
+        const cy = w * gy;
+        const cz = w * gz;
+
+        dX[i] += cx;
+        dY[i] += cy;
+        dZ[i] += cz;
+        dX[j] -= cx;
+        dY[j] -= cy;
+        dZ[j] -= cz;
+      }
+
+      for (let i = 0; i < N; i++) {
+        let dx = dX[i] * relax;
+        let dy = dY[i] * relax;
+        let dz = dZ[i] * relax;
+        const len2 = dx * dx + dy * dy + dz * dz;
+        if (len2 > maxCorr * maxCorr) {
+          const scale = maxCorr / Math.sqrt(len2);
+          dx *= scale;
+          dy *= scale;
+          dz *= scale;
+        }
+        px[i] = clamp(px[i] + dx, MIN_X, MAX_X);
+        py[i] = clamp(py[i] + dy, MIN_Y, MAX_Y);
+        pz[i] = clamp(pz[i] + dz, MIN_Z, MAX_Z);
+      }
+    }
+
+    applyViscosity(strength) {
+      // Pairwise XSPH-style velocity smoothing with a Poly6 falloff.
+      const px = this.predX;
+      const py = this.predY;
+      const pz = this.predZ;
+      const vx = this.velX;
+      const vy = this.velY;
+      const vz = this.velZ;
+      const sx = this.smoothX;
+      const sy = this.smoothY;
+      const sz = this.smoothZ;
+      const viscWeight = this.viscWeight;
+      const pairA = this.pairA;
+      const pairB = this.pairB;
+      const pairCount = this.pairCount;
+      const h2 = H2;
+      const invH2 = 1 / H2;
+
+      sx.fill(0);
+      sy.fill(0);
+      sz.fill(0);
+      viscWeight.fill(0);
+
+      for (let p = 0; p < pairCount; p++) {
+        const i = pairA[p];
+        const j = pairB[p];
+        const dx = px[i] - px[j];
+        const dy = py[i] - py[j];
+        const dz = pz[i] - pz[j];
+        const r2 = dx * dx + dy * dy + dz * dz;
+        if (r2 >= h2) continue;
+
+        const t = 1 - r2 * invH2;
+        const w = t * t * t;
+        const vxi = vx[i];
+        const vyi = vy[i];
+        const vzi = vz[i];
+        const vxj = vx[j];
+        const vyj = vy[j];
+        const vzj = vz[j];
+        sx[i] += (vxj - vxi) * w;
+        sy[i] += (vyj - vyi) * w;
+        sz[i] += (vzj - vzi) * w;
+        sx[j] += (vxi - vxj) * w;
+        sy[j] += (vyi - vyj) * w;
+        sz[j] += (vzi - vzj) * w;
+        viscWeight[i] += w;
+        viscWeight[j] += w;
+      }
+
+      for (let i = 0; i < N; i++) {
+        const sumW = viscWeight[i];
+        if (sumW > 1e-8) {
+          const scale = strength / sumW;
+          vx[i] += sx[i] * scale;
+          vy[i] += sy[i] * scale;
+          vz[i] += sz[i] * scale;
+        }
+      }
+    }
+
+    applyBoundaryResponse() {
+      // Closed vessel: reflect the inward normal component with restitution and
+      // apply contact friction to the two tangential components. Below the
+      // restitution threshold the normal component is pinned to rest instead,
+      // which prevents permanent micro-bouncing at the glass.
+      const px = this.predX;
+      const py = this.predY;
+      const pz = this.predZ;
+      const vx = this.velX;
+      const vy = this.velY;
+      const vz = this.velZ;
+      const restitution = CFG.restitution;
+      const bounceThreshold = CFG.contactRestitutionThreshold;
+      const friction = CFG.wallFriction;
+      const eps = 1e-6;
+
+      for (let i = 0; i < N; i++) {
+        if (px[i] <= MIN_X + eps) {
+          if (vx[i] < -bounceThreshold) vx[i] = -vx[i] * restitution;
+          else if (Math.abs(vx[i]) < bounceThreshold) vx[i] = 0;
+          vy[i] *= friction;
+          vz[i] *= friction;
+        } else if (px[i] >= MAX_X - eps) {
+          if (vx[i] > bounceThreshold) vx[i] = -vx[i] * restitution;
+          else if (Math.abs(vx[i]) < bounceThreshold) vx[i] = 0;
+          vy[i] *= friction;
+          vz[i] *= friction;
+        }
+
+        if (py[i] <= MIN_Y + eps) {
+          if (vy[i] < -bounceThreshold) vy[i] = -vy[i] * restitution;
+          else if (Math.abs(vy[i]) < bounceThreshold) vy[i] = 0;
+          vx[i] *= friction;
+          vz[i] *= friction;
+        } else if (py[i] >= MAX_Y - eps) {
+          if (vy[i] > bounceThreshold) vy[i] = -vy[i] * restitution;
+          else if (Math.abs(vy[i]) < bounceThreshold) vy[i] = 0;
+          vx[i] *= friction;
+          vz[i] *= friction;
+        }
+
+        if (pz[i] <= MIN_Z + eps) {
+          if (vz[i] < -bounceThreshold) vz[i] = -vz[i] * restitution;
+          else if (Math.abs(vz[i]) < bounceThreshold) vz[i] = 0;
+          vx[i] *= friction;
+          vy[i] *= friction;
+        } else if (pz[i] >= MAX_Z - eps) {
+          if (vz[i] > bounceThreshold) vz[i] = -vz[i] * restitution;
+          else if (Math.abs(vz[i]) < bounceThreshold) vz[i] = 0;
+          vx[i] *= friction;
+          vy[i] *= friction;
+        }
+      }
+    }
+
+    step(dt, gravity, viscosity) {
+      const vx = this.velX;
+      const vy = this.velY;
+      const vz = this.velZ;
+      const px = this.predX;
+      const py = this.predY;
+      const pz = this.predZ;
+      const ox = this.posX;
+      const oy = this.posY;
+      const oz = this.posZ;
+      const gdt = gravity * dt;
+
+      for (let i = 0; i < N; i++) {
+        vy[i] -= gdt;
+        px[i] = clamp(ox[i] + vx[i] * dt, MIN_X, MAX_X);
+        py[i] = clamp(oy[i] + vy[i] * dt, MIN_Y, MAX_Y);
+        pz[i] = clamp(oz[i] + vz[i] * dt, MIN_Z, MAX_Z);
+      }
+
+      this.buildPairs();
+
+      for (let iter = 0; iter < this.iterations; iter++) {
+        this.computeDensityAndLambda();
+        this.applyDensityCorrection();
+      }
+
+      let maxSpeed2 = 0;
+      let peakDensity = 1;
+      const invDt = 1 / dt;
+      let nonFinite = 0;
+      let escapes = 0;
+      let speedClamps = 0;
+      const maxSpeed = this.maxSpeed;
+      const maxSpeed2Limit = maxSpeed * maxSpeed;
+
+      for (let i = 0; i < N; i++) {
+        let nvx = (px[i] - ox[i]) * invDt;
+        let nvy = (py[i] - oy[i]) * invDt;
+        let nvz = (pz[i] - oz[i]) * invDt;
+
+        if (!Number.isFinite(nvx) || !Number.isFinite(nvy) || !Number.isFinite(nvz) ||
+            !Number.isFinite(px[i]) || !Number.isFinite(py[i]) || !Number.isFinite(pz[i])) {
+          nonFinite++;
+          nvx = 0; nvy = 0; nvz = 0;
+          px[i] = 0;
+          py[i] = MIN_Y + 0.05;
+          pz[i] = 0;
+        }
+
+        const sp2 = nvx * nvx + nvy * nvy + nvz * nvz;
+        if (sp2 > maxSpeed2Limit) {
+          const s = maxSpeed / Math.sqrt(sp2);
+          nvx *= s; nvy *= s; nvz *= s;
+          speedClamps++;
+        }
+
+        vx[i] = nvx;
+        vy[i] = nvy;
+        vz[i] = nvz;
+
+        const ratio = this.density[i] * INV_REST;
+        if (ratio > peakDensity) peakDensity = ratio;
+        const speed2 = nvx * nvx + nvy * nvy + nvz * nvz;
+        if (speed2 > maxSpeed2) maxSpeed2 = speed2;
+      }
+
+      if (viscosity > 0) {
+        this.applyViscosity(viscosity * CFG.viscosityGain);
+      }
+
+      this.applyBoundaryResponse();
+
+      for (let i = 0; i < N; i++) {
+        ox[i] = px[i];
+        oy[i] = py[i];
+        oz[i] = pz[i];
+
+        if (ox[i] < MIN_X - 1e-5 || ox[i] > MAX_X + 1e-5 ||
+            oy[i] < MIN_Y - 1e-5 || oy[i] > MAX_Y + 1e-5 ||
+            oz[i] < MIN_Z - 1e-5 || oz[i] > MAX_Z + 1e-5) {
+          escapes++;
+          ox[i] = clamp(ox[i], MIN_X, MAX_X);
+          oy[i] = clamp(oy[i], MIN_Y, MAX_Y);
+          oz[i] = clamp(oz[i], MIN_Z, MAX_Z);
+        }
+      }
+
+      this.time += dt;
+      this.totalSteps++;
+      this.lastMaxSpeed = Math.sqrt(maxSpeed2);
+      this.lastPeakDensity = peakDensity;
+      this.anomalyCounts.nonFinite += nonFinite;
+      this.anomalyCounts.escapes += escapes;
+      this.anomalyCounts.speedClamps += speedClamps;
+    }
+
+    colorPass() {
+      // Kinetic energy plus local compression drive the blue -> cyan -> red ramp.
+      const rp = this.renderPositions;
+      const rc = this.renderColors;
+      const px = this.posX;
+      const py = this.posY;
+      const pz = this.posZ;
+      const vx = this.velX;
+      const vy = this.velY;
+      const vz = this.velZ;
+      const density = this.density;
+      const invRest = INV_REST;
+
+      for (let i = 0; i < N; i++) {
+        const i3 = i * 3;
+        rp[i3] = px[i];
+        rp[i3 + 1] = py[i];
+        rp[i3 + 2] = pz[i];
+
+        const speed = Math.sqrt(vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
+        const speedT = clamp(speed / 4.5, 0, 1);
+        const ratio = density[i] * invRest;
+        const pressureT = clamp((ratio - 1.035) / 0.16, 0, 1);
+        const speedEnergy = Math.pow(speedT, 0.82);
+        const energy = Math.min(1, Math.max(speedEnergy, pressureT * 0.92));
+
+        let r;
+        let g;
+        let b;
+        if (energy < 0.62) {
+          const t = smoothstep(0, 0.62, energy);
+          r = mix(0.018, 0.035, t);
+          g = mix(0.070, 0.740, t);
+          b = mix(0.335, 0.905, t);
+        } else {
+          const t = smoothstep(0.62, 1, energy);
+          r = mix(0.035, 1.000, t);
+          g = mix(0.740, 0.260, t);
+          b = mix(0.905, 0.110, t);
+        }
+
+        rc[i3] = r;
+        rc[i3 + 1] = g;
+        rc[i3 + 2] = b;
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // WebGL2 renderer
+  // ---------------------------------------------------------------------------
+
+  const PARTICLE_VS = `#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aPosition;
+layout(location = 1) in vec3 aColor;
+uniform mat4 uViewProjection;
+uniform float uPointScale;
+uniform float uDiameter;
+uniform float uMaxPointSize;
+out vec3 vColor;
+void main() {
+  gl_Position = uViewProjection * vec4(aPosition, 1.0);
+  float w = max(gl_Position.w, 0.08);
+  gl_PointSize = clamp(uDiameter * uPointScale / w, 1.0, uMaxPointSize);
+  vColor = aColor;
+}`;
+
+  const PARTICLE_FS = `#version 300 es
+precision highp float;
+layout(location = 0) out vec4 fragColor;
+in vec3 vColor;
+void main() {
+  vec2 p = gl_PointCoord * 2.0 - 1.0;
+  float r2 = dot(p, p);
+  if (r2 > 1.0) discard;
+  float z = sqrt(max(0.0, 1.0 - r2));
+  vec3 n = vec3(p.x, -p.y, z);
+  vec3 lightDir = normalize(vec3(-0.42, 0.76, 0.62));
+  float diffuse = max(dot(n, lightDir), 0.0);
+  float spec = pow(max(dot(n, normalize(lightDir + vec3(0.0, 0.0, 1.0))), 0.0), 30.0);
+  float rim = pow(1.0 - z, 2.2);
+  vec3 color = vColor * (0.54 + 0.62 * diffuse);
+  color += vec3(0.16, 0.34, 0.37) * rim * 0.20;
+  color += vec3(1.0) * spec * 0.34;
+  float alpha = 1.0 - smoothstep(0.92, 1.0, r2);
+  fragColor = vec4(min(color, vec3(1.45)), alpha);
+}`;
+
+  const LINE_VS = `#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aPosition;
+layout(location = 1) in vec4 aColor;
+uniform mat4 uViewProjection;
+out vec4 vColor;
+void main() {
+  gl_Position = uViewProjection * vec4(aPosition, 1.0);
+  vColor = aColor;
+}`;
+
+  const LINE_FS = `#version 300 es
+precision highp float;
+layout(location = 0) out vec4 fragColor;
+in vec4 vColor;
+void main() {
+  fragColor = vColor;
+}`;
+
+  const GLASS_VS = `#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aPosition;
+layout(location = 1) in vec3 aNormal;
+uniform mat4 uViewProjection;
+out vec3 vNormal;
+out vec3 vWorld;
+void main() {
+  gl_Position = uViewProjection * vec4(aPosition, 1.0);
+  vNormal = aNormal;
+  vWorld = aPosition;
+}`;
+
+  const GLASS_FS = `#version 300 es
+precision highp float;
+layout(location = 0) out vec4 fragColor;
+in vec3 vNormal;
+in vec3 vWorld;
+uniform vec3 uCameraPosition;
+void main() {
+  vec3 viewDir = normalize(uCameraPosition - vWorld);
+  float fresnel = pow(1.0 - abs(dot(normalize(vNormal), viewDir)), 2.45);
+  vec3 tint = vec3(0.075, 0.225, 0.250);
+  vec3 color = tint * (0.018 + fresnel * 0.72);
+  fragColor = vec4(color, 1.0);
+}`;
+
+  const FLAT_VS = `#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aPosition;
+uniform mat4 uViewProjection;
+void main() {
+  gl_Position = uViewProjection * vec4(aPosition, 1.0);
+}`;
+
+  const FLAT_FS = `#version 300 es
+precision highp float;
+layout(location = 0) out vec4 fragColor;
+uniform vec4 uColor;
+void main() {
+  fragColor = uColor;
+}`;
+
+  function compileShader(gl, type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      const log = gl.getShaderInfoLog(shader);
+      gl.deleteShader(shader);
+      throw new Error("Shader compile failure: " + log);
+    }
+    return shader;
+  }
+
+  function createProgram(gl, vertexSource, fragmentSource) {
+    const vs = compileShader(gl, gl.VERTEX_SHADER, vertexSource);
+    const fs = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
+    const program = gl.createProgram();
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.linkProgram(program);
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      const log = gl.getProgramInfoLog(program);
+      gl.deleteProgram(program);
+      throw new Error("Program link failure: " + log);
+    }
+    return program;
+  }
+
+  class LineBuilder {
+    constructor() { this.data = []; }
+    add(ax, ay, az, bx, by, bz, r, g, b, a) {
+      this.data.push(ax, ay, az, r, g, b, a, bx, by, bz, r, g, b, a);
+    }
+    build(gl) {
+      const data = new Float32Array(this.data);
+      const vao = gl.createVertexArray();
+      const buffer = gl.createBuffer();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 7 * 4, 0);
+      gl.enableVertexAttribArray(1);
+      gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 7 * 4, 3 * 4);
+      gl.bindVertexArray(null);
+      return { vao, buffer, count: data.length / 7 };
+    }
+  }
+
+  function buildGroundLines() {
+    const b = new LineBuilder();
+    const extent = 4.5;
+    const divisions = 30;
+    const y = -0.036;
+    for (let i = 0; i <= divisions; i++) {
+      const v = -extent + (i / divisions) * extent * 2;
+      const major = i % 5 === 0;
+      const alpha = major ? 0.32 : 0.15;
+      const r = major ? 0.14 : 0.085;
+      const g = major ? 0.20 : 0.115;
+      const bl = major ? 0.22 : 0.13;
+      b.add(v, y, -extent, v, y, extent, r, g, bl, alpha);
+      b.add(-extent, y, v, extent, y, v, r, g, bl, alpha);
+    }
+    return b;
+  }
+
+  function buildInteriorLines() {
+    const b = new LineBuilder();
+    const y = 0.004;
+    const extent = HALF - 0.035;
+    const divisions = 10;
+    for (let i = 0; i <= divisions; i++) {
+      const v = -extent + (i / divisions) * extent * 2;
+      const major = i === 0 || i === divisions || i === divisions / 2;
+      const alpha = major ? 0.40 : 0.22;
+      const c = major ? 0.17 : 0.10;
+      b.add(v, y, -extent, v, y, extent, c, c * 1.35, c * 1.45, alpha);
+      b.add(-extent, y, v, extent, y, v, c, c * 1.35, c * 1.45, alpha);
+    }
+    return b;
+  }
+
+  function buildFrameLines() {
+    const b = new LineBuilder();
+    const x0 = -HALF;
+    const x1 = HALF;
+    const y0 = 0;
+    const y1 = CEILING;
+    const z0 = -HALF;
+    const z1 = HALF;
+    const edge = [0.36, 0.62, 0.64, 0.72];
+    const bottom = [0.20, 0.32, 0.34, 0.58];
+
+    const corners = [
+      [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1],
+      [x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]
+    ];
+    const edges = [
+      [0, 1], [1, 2], [2, 3], [3, 0],
+      [4, 5], [5, 6], [6, 7], [7, 4],
+      [0, 4], [1, 5], [2, 6], [3, 7]
+    ];
+    for (const [a, c] of edges) {
+      const ca = corners[a];
+      const cb = corners[c];
+      const col = ca[1] === 0 && cb[1] === 0 ? bottom : edge;
+      b.add(ca[0], ca[1], ca[2], cb[0], cb[1], cb[2], col[0], col[1], col[2], col[3]);
+    }
+
+    const plate = 0.972;
+    const py = -0.021;
+    const pc = [0.22, 0.31, 0.33, 0.60];
+    b.add(-plate, py, -plate, plate, py, -plate, pc[0], pc[1], pc[2], pc[3]);
+    b.add(plate, py, -plate, plate, py, plate, pc[0], pc[1], pc[2], pc[3]);
+    b.add(plate, py, plate, -plate, py, plate, pc[0], pc[1], pc[2], pc[3]);
+    b.add(-plate, py, plate, -plate, py, -plate, pc[0], pc[1], pc[2], pc[3]);
+
+    const tick = 0.055;
+    const tc = [0.26, 0.44, 0.46, 0.48];
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        const cx = sx * plate;
+        const cz = sz * plate;
+        b.add(cx, py, cz, cx - sx * tick, py, cz, tc[0], tc[1], tc[2], tc[3]);
+        b.add(cx, py, cz, cx, py, cz - sz * tick, tc[0], tc[1], tc[2], tc[3]);
+      }
+    }
+    return b;
+  }
+
+  function buildSlab(gl) {
+    const half = 0.972;
+    const y = -0.022;
+    const data = new Float32Array([
+      -half, y, -half, half, y, -half, half, y, half,
+      -half, y, -half, half, y, half, -half, y, half
+    ]);
+    const vao = gl.createVertexArray();
+    const buffer = gl.createBuffer();
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+    gl.bindVertexArray(null);
+    return { vao, buffer, count: 6 };
+  }
+
+  function buildGlass(gl) {
+    const x0 = -HALF;
+    const x1 = HALF;
+    const y0 = 0;
+    const y1 = CEILING;
+    const z0 = -HALF;
+    const z1 = HALF;
+    const faces = [
+      [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1]],
+      [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1]],
+      [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y0, z0], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0]],
+      [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y0, z1], [x1, y1, z0], [x1, y1, z1], [1, 0, 0]],
+      [[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z1], [x1, y1, z0], [x0, y1, z0], [0, 1, 0]],
+      [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z0], [x1, y0, z1], [x0, y0, z1], [0, -1, 0]]
+    ];
+    const data = [];
+    for (const face of faces) {
+      const n = face[6];
+      for (let i = 0; i < 6; i++) {
+        data.push(face[i][0], face[i][1], face[i][2], n[0], n[1], n[2]);
+      }
+    }
+    const array = new Float32Array(data);
+    const vao = gl.createVertexArray();
+    const buffer = gl.createBuffer();
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, array, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 6 * 4, 0);
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 6 * 4, 3 * 4);
+    gl.bindVertexArray(null);
+    return { vao, buffer, count: array.length / 6 };
+  }
+
+  class FluidRenderer {
+    constructor(gl) {
+      this.gl = gl;
+      this.particleProgram = createProgram(gl, PARTICLE_VS, PARTICLE_FS);
+      this.lineProgram = createProgram(gl, LINE_VS, LINE_FS);
+      this.glassProgram = createProgram(gl, GLASS_VS, GLASS_FS);
+      this.flatProgram = createProgram(gl, FLAT_VS, FLAT_FS);
+
+      this.particleUniforms = {
+        viewProjection: gl.getUniformLocation(this.particleProgram, "uViewProjection"),
+        pointScale: gl.getUniformLocation(this.particleProgram, "uPointScale"),
+        diameter: gl.getUniformLocation(this.particleProgram, "uDiameter"),
+        maxPointSize: gl.getUniformLocation(this.particleProgram, "uMaxPointSize")
+      };
+      this.lineVP = gl.getUniformLocation(this.lineProgram, "uViewProjection");
+      this.glassVP = gl.getUniformLocation(this.glassProgram, "uViewProjection");
+      this.glassCamera = gl.getUniformLocation(this.glassProgram, "uCameraPosition");
+      this.flatVP = gl.getUniformLocation(this.flatProgram, "uViewProjection");
+      this.flatColor = gl.getUniformLocation(this.flatProgram, "uColor");
+
+      this.vp = new Float32Array(16);
+      this.view = new Float32Array(16);
+      this.projection = new Float32Array(16);
+      this.cameraEye = new Float32Array(3);
+      this.viewport = { width: 1, height: 1, dpr: 1 };
+      this.maxPointSize = Math.min(80, gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1] || 64);
+
+      this.particleVao = gl.createVertexArray();
+      this.particlePositionBuffer = gl.createBuffer();
+      this.particleColorBuffer = gl.createBuffer();
+      gl.bindVertexArray(this.particleVao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.particlePositionBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, N * 3 * 4, gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.particleColorBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, N * 3 * 4, gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(1);
+      gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+      gl.bindVertexArray(null);
+
+      const groundBuilder = buildGroundLines();
+      const interiorBuilder = buildInteriorLines();
+      const frameBuilder = buildFrameLines();
+      this.groundLines = groundBuilder.build(gl);
+      this.interiorLines = interiorBuilder.build(gl);
+      this.frameLines = frameBuilder.build(gl);
+      this.slab = buildSlab(gl);
+      this.glass = buildGlass(gl);
+
+      gl.disable(gl.CULL_FACE);
+      gl.depthFunc(gl.LEQUAL);
+    }
+
+    resize() {
+      const gl = this.gl;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const canvas = gl.canvas;
+      const cssWidth = Math.max(1, canvas.clientWidth || window.innerWidth);
+      const cssHeight = Math.max(1, canvas.clientHeight || window.innerHeight);
+      const width = Math.max(1, Math.floor(cssWidth * dpr));
+      const height = Math.max(1, Math.floor(cssHeight * dpr));
+      if (width === this.viewport.width && height === this.viewport.height && dpr === this.viewport.dpr) {
+        return false;
+      }
+      this.viewport.width = width;
+      this.viewport.height = height;
+      this.viewport.dpr = dpr;
+      if (canvas.width !== width) canvas.width = width;
+      if (canvas.height !== height) canvas.height = height;
+      gl.viewport(0, 0, width, height);
+      return true;
+    }
+
+    updateCamera(camera) {
+      const cp = Math.cos(camera.pitch);
+      const eye = this.cameraEye;
+      eye[0] = camera.target[0] + camera.distance * cp * Math.sin(camera.yaw);
+      eye[1] = camera.target[1] + camera.distance * Math.sin(camera.pitch);
+      eye[2] = camera.target[2] + camera.distance * cp * Math.cos(camera.yaw);
+      lookAt(this.view, eye, camera.target, [0, 1, 0]);
+      perspective(this.projection, CFG.fovY, this.viewport.width / this.viewport.height, 0.08, 30);
+      multiplyMat4(this.vp, this.projection, this.view);
+      this.pointScale = (this.viewport.height * 0.5) / Math.tan(CFG.fovY * 0.5);
+    }
+
+    uploadParticles(fluid) {
+      const gl = this.gl;
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.particlePositionBuffer);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, fluid.renderPositions);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.particleColorBuffer);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, fluid.renderColors);
+    }
+
+    drawLineMesh(mesh) {
+      const gl = this.gl;
+      gl.bindVertexArray(mesh.vao);
+      gl.drawArrays(gl.LINES, 0, mesh.count);
+    }
+
+    render(fluid, camera) {
+      const gl = this.gl;
+      if (this.resize()) {
+        this.uploadParticles(fluid);
+      }
+      this.updateCamera(camera);
+      this.uploadParticles(fluid);
+
+      gl.clearColor(0.029, 0.036, 0.039, 1);
+      gl.clearDepth(1);
+      gl.depthMask(true);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      gl.disable(gl.BLEND);
+      gl.useProgram(this.flatProgram);
+      gl.uniformMatrix4fv(this.flatVP, false, this.vp);
+      gl.uniform4f(this.flatColor, 0.038, 0.047, 0.051, 1);
+      gl.bindVertexArray(this.slab.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, this.slab.count);
+
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+      gl.useProgram(this.lineProgram);
+      gl.uniformMatrix4fv(this.lineVP, false, this.vp);
+      this.drawLineMesh(this.groundLines);
+      this.drawLineMesh(this.interiorLines);
+
+      gl.depthMask(true);
+      gl.useProgram(this.particleProgram);
+      gl.uniformMatrix4fv(this.particleUniforms.viewProjection, false, this.vp);
+      gl.uniform1f(this.particleUniforms.pointScale, this.pointScale);
+      gl.uniform1f(this.particleUniforms.diameter, CFG.renderDiameter);
+      gl.uniform1f(this.particleUniforms.maxPointSize, this.maxPointSize);
+      gl.bindVertexArray(this.particleVao);
+      gl.drawArrays(gl.POINTS, 0, N);
+
+      gl.depthMask(false);
+      gl.blendFunc(gl.ONE, gl.ONE);
+      gl.useProgram(this.glassProgram);
+      gl.uniformMatrix4fv(this.glassVP, false, this.vp);
+      gl.uniform3f(this.glassCamera, this.cameraEye[0], this.cameraEye[1], this.cameraEye[2]);
+      gl.bindVertexArray(this.glass.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, this.glass.count);
+
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.useProgram(this.lineProgram);
+      gl.uniformMatrix4fv(this.lineVP, false, this.vp);
+      this.drawLineMesh(this.frameLines);
+
+      gl.depthMask(true);
+      gl.bindVertexArray(null);
+      gl.disable(gl.BLEND);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // UI / benchmark state
+  // ---------------------------------------------------------------------------
+
+  const ui = {
+    fps: $("fpsValue"),
+    frameMs: $("frameMs"),
+    physicsMs: $("physicsMs"),
+    particleCount: $("particleCount"),
+    simTime: $("simTime"),
+    gravity: $("gravity"),
+    gravityValue: $("gravityValue"),
+    viscosity: $("viscosity"),
+    viscosityValue: $("viscosityValue"),
+    resetBtn: $("resetBtn"),
+    runBenchBtn: $("runBenchBtn"),
+    exportJsonBtn: $("exportJsonBtn"),
+    exportCsvBtn: $("exportCsvBtn"),
+    benchStatus: $("benchStatus"),
+    benchDetail: $("benchDetail"),
+    benchDot: $("benchDot"),
+    benchProgressWrap: $("benchProgressWrap"),
+    benchProgress: $("benchProgress"),
+    lastRun: $("lastRun"),
+    resultRunId: $("resultRunId"),
+    resultAnomalies: $("resultAnomalies"),
+    resultAvgFrame: $("resultAvgFrame"),
+    resultP95Frame: $("resultP95Frame"),
+    resultAvgPhysics: $("resultAvgPhysics"),
+    resultFps: $("resultFps"),
+    resultDuration: $("resultDuration"),
+    resultParticles: $("resultParticles"),
+    trace: $("trace")
+  };
+
+  const traceCtx = ui.trace.getContext("2d");
+  const recentFrames = [];
+  const recentPhysics = [];
+  const traceSamples = 90;
+  const traceMaxMs = 40;
+
+  const simSettings = {
+    gravity: CFG.gravityDefault,
+    viscosity: CFG.viscosityDefault
+  };
+
+  const camera = {
+    yaw: 0.61,
+    pitch: 0.295,
+    distance: 3.74,
+    target: [0, 0.675, 0]
+  };
+
+  const CAMERA_DEFAULT = {
+    yaw: 0.61,
+    pitch: 0.295,
+    distance: 3.74
+  };
+
+  const benchmark = {
+    active: false,
+    phase: "idle",
+    warmupDone: 0,
+    sampleDone: 0,
+    samplePrev: 0,
+    sampleStart: 0,
+    frameTimes: new Float64Array(CFG.benchmarkSamples),
+    physicsTimes: new Float64Array(CFG.benchmarkSamples),
+    elapsedTimes: new Float64Array(CFG.benchmarkSamples),
+    maxSpeeds: new Float64Array(CFG.benchmarkSamples),
+    maxDensities: new Float64Array(CFG.benchmarkSamples),
+    anomalyStart: null,
+    environment: null,
+    results: null,
+    runId: ""
+  };
+
+  let gl;
+  let fluid;
+  let renderer;
+  let resizeObserver;
+  let lastFrameStamp = 0;
+  let accumulator = 0;
+  let lastHudUpdate = 0;
+  let bootClosed = false;
+  let dragging = false;
+  let dragX = 0;
+  let dragY = 0;
+
+  function bootFailure(message) {
+    const boot = $("boot");
+    const msg = $("bootMsg");
+    if (!boot || !msg) return;
+    boot.style.display = "flex";
+    boot.classList.remove("hidden");
+    boot.classList.add("error");
+    msg.textContent = message;
+  }
+
+  window.addEventListener("error", (event) => {
+    if (!bootClosed) {
+      bootFailure("INITIALIZATION FAULT · " + (event.message || "UNKNOWN ERROR"));
+    }
+  });
+
+  function formatSimTime(t) {
+    const total = Math.max(0, t);
+    const minutes = Math.floor(total / 60);
+    const seconds = Math.floor(total % 60);
+    const hundredths = Math.floor((total - Math.floor(total)) * 100);
+    return String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0") + "." + String(hundredths).padStart(2, "0");
+  }
+
+  function syncRange(input) {
+    const min = Number(input.min);
+    const max = Number(input.max);
+    const value = Number(input.value);
+    const pct = max === min ? 0 : ((value - min) / (max - min)) * 100;
+    input.style.setProperty("--pct", pct.toFixed(2) + "%");
+  }
+
+  function setGravity(value) {
+    simSettings.gravity = clamp(Number(value), 0, 24);
+    ui.gravity.value = simSettings.gravity.toFixed(2);
+    ui.gravityValue.textContent = simSettings.gravity.toFixed(2);
+    syncRange(ui.gravity);
+  }
+
+  function setViscosity(value) {
+    simSettings.viscosity = clamp(Number(value), 0, 1);
+    ui.viscosity.value = simSettings.viscosity.toFixed(2);
+    ui.viscosityValue.textContent = simSettings.viscosity.toFixed(2);
+    syncRange(ui.viscosity);
+  }
+
+  function resetCamera() {
+    camera.yaw = CAMERA_DEFAULT.yaw;
+    camera.pitch = CAMERA_DEFAULT.pitch;
+    camera.distance = CAMERA_DEFAULT.distance;
+  }
+
+  function resetSimulation() {
+    if (benchmark.active) return;
+    fluid.reset(CFG.seed);
+    accumulator = 0;
+    ui.simTime.textContent = "00:00.00";
+    fluid.colorPass();
+  }
+
+  function setBenchmarkControlsDisabled(disabled) {
+    ui.resetBtn.disabled = disabled;
+    ui.gravity.disabled = disabled;
+    ui.viscosity.disabled = disabled;
+  }
+
+  function setBenchStatus(state, label, detail, progress) {
+    ui.benchDot.dataset.state = state;
+    ui.benchProgressWrap.dataset.state = state;
+    ui.benchStatus.textContent = label;
+    ui.benchDetail.textContent = detail;
+    if (typeof progress === "number") {
+      ui.benchProgress.style.width = (clamp(progress, 0, 100)).toFixed(2) + "%";
+    }
+  }
+
+  function clearBenchResultDisplay() {
+    ui.lastRun.hidden = true;
+    ui.resultRunId.textContent = "--";
+    ui.resultAnomalies.textContent = "ANOM 0";
+    ui.resultAvgFrame.textContent = "--";
+    ui.resultP95Frame.textContent = "--";
+    ui.resultAvgPhysics.textContent = "--";
+    ui.resultFps.textContent = "--";
+    ui.resultDuration.textContent = "--";
+    ui.resultParticles.textContent = "--";
+  }
+
+  function getEnvironment() {
+    const canvas = gl.canvas;
+    const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
+    const attrs = gl.getContextAttributes();
+    const memory = typeof navigator.deviceMemory === "number" ? navigator.deviceMemory : null;
+    const uaData = navigator.userAgentData || null;
+    const pointRange = gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE);
+    return {
+      timestamp: new Date().toISOString(),
+      userAgent: navigator.userAgent,
+      language: navigator.language,
+      platform: (uaData && uaData.platform) || navigator.platform || "unknown",
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "unknown",
+      hardwareConcurrency: navigator.hardwareConcurrency || null,
+      deviceMemoryGB: memory,
+      screenWidthPx: window.screen.width,
+      screenHeightPx: window.screen.height,
+      devicePixelRatio: window.devicePixelRatio || 1,
+      drawingBufferWidthPx: canvas.width,
+      drawingBufferHeightPx: canvas.height,
+      cssWidthPx: window.innerWidth,
+      cssHeightPx: window.innerHeight,
+      webglVersion: gl.getParameter(gl.VERSION),
+      glslVersion: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
+      gpuVendor: debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : "unavailable",
+      gpuRenderer: debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : "unavailable",
+      antialias: !!attrs.antialias,
+      maxPointSizePx: pointRange ? pointRange[1] : null,
+      powerPreference: attrs.powerPreference || "default"
+    };
+  }
+
+  function mean(values) {
+    if (!values.length) return 0;
+    let sum = 0;
+    for (let i = 0; i < values.length; i++) sum += values[i];
+    return sum / values.length;
+  }
+
+  function percentile(sorted, p) {
+    if (!sorted.length) return 0;
+    const position = (sorted.length - 1) * p;
+    const lower = Math.floor(position);
+    const upper = Math.min(lower + 1, sorted.length - 1);
+    return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower);
+  }
+
+  function summarize(values) {
+    const sorted = Array.from(values).sort((a, b) => a - b);
+    let sum = 0;
+    let min = Infinity;
+    let max = -Infinity;
+    for (let i = 0; i < sorted.length; i++) {
+      const v = sorted[i];
+      sum += v;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    if (!sorted.length) return { avg: 0, median: 0, p95: 0, min: 0, max: 0, total: 0 };
+    return {
+      avg: sum / sorted.length,
+      median: percentile(sorted, 0.5),
+      p95: percentile(sorted, 0.95),
+      min,
+      max,
+      total: sum
+    };
+  }
+
+  function round(value, digits) {
+    const factor = Math.pow(10, digits);
+    return Math.round(value * factor) / factor;
+  }
+
+  function makeRunId(date) {
+    const stamp = date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+    return "SPH-" + stamp + "-" + CFG.seed.toString(16).toUpperCase();
+  }
+
+  function finalizeBenchmark(now) {
+    const env = benchmark.environment;
+    const frameArray = benchmark.frameTimes.subarray(0, benchmark.sampleDone);
+    const physicsArray = benchmark.physicsTimes.subarray(0, benchmark.sampleDone);
+    const elapsedArray = benchmark.elapsedTimes.subarray(0, benchmark.sampleDone);
+    const speedArray = benchmark.maxSpeeds.subarray(0, benchmark.sampleDone);
+    const densityArray = benchmark.maxDensities.subarray(0, benchmark.sampleDone);
+
+    const frameStats = summarize(frameArray);
+    const physicsStats = summarize(physicsArray);
+    const durationMs = elapsedArray.length ? elapsedArray[elapsedArray.length - 1] : 0;
+    const avgFps = frameStats.avg > 0 ? 1000 / frameStats.avg : 0;
+
+    let longFrames = 0;
+    let severeFrames = 0;
+    let maxSpeed = 0;
+    let maxDensity = 0;
+    for (let i = 0; i < benchmark.sampleDone; i++) {
+      if (frameArray[i] > CFG.longFrameMs) longFrames++;
+      if (frameArray[i] > 250) severeFrames++;
+      if (speedArray[i] > maxSpeed) maxSpeed = speedArray[i];
+      if (densityArray[i] > maxDensity) maxDensity = densityArray[i];
+    }
+
+    const anomalyDelta = {
+      nonFinite: fluid.anomalyCounts.nonFinite - benchmark.anomalyStart.nonFinite,
+      escapes: fluid.anomalyCounts.escapes - benchmark.anomalyStart.escapes,
+      speedClamps: fluid.anomalyCounts.speedClamps - benchmark.anomalyStart.speedClamps,
+      neighborOverflow: fluid.anomalyCounts.neighborOverflow - benchmark.anomalyStart.neighborOverflow
+    };
+    const anomaliesTotal = longFrames + anomalyDelta.nonFinite + anomalyDelta.escapes + anomalyDelta.neighborOverflow + anomalyDelta.speedClamps;
+
+    const generated = new Date();
+    const result = {
+      schema: "hydro-sph-benchmark/1.0",
+      runId: benchmark.runId,
+      generatedAt: generated.toISOString(),
+      environment: env,
+      workload: {
+        algorithm: "Position Based Fluids / SPH",
+        kernelDensity: "Poly6",
+        kernelGradient: "Spiky",
+        particleCount: N,
+        seed: "0x" + CFG.seed.toString(16).toUpperCase().padStart(8, "0"),
+        containerMeters: [CFG.containerSize, CFG.containerSize, CFG.containerSize],
+        smoothingRadiusMeters: H,
+        fixedTimestepSeconds: CFG.fixedDt,
+        solverIterationsPerSubstep: CFG.solverIterations,
+        substepsPerFrame: CFG.benchmarkSubsteps,
+        warmupFrames: CFG.benchmarkWarmup,
+        sampledFrames: CFG.benchmarkSamples,
+        particleStepsPerSampleFrame: N * CFG.benchmarkSubsteps
+      },
+      settings: {
+        gravityMetersPerSecond2: simSettings.gravity,
+        viscosityCoefficient: simSettings.viscosity,
+        viscosityGain: CFG.viscosityGain,
+        restitution: CFG.restitution,
+        contactRestitutionThreshold: CFG.contactRestitutionThreshold,
+        wallFrictionPerSubstep: CFG.wallFriction,
+        densityConstraint: "compression-only"
+      },
+      summary: {
+        samplingDurationMs: round(durationMs, 3),
+        samplingDurationSeconds: round(durationMs / 1000, 3),
+        avgFps: round(avgFps, 3),
+        frameTimeMs: {
+          avg: round(frameStats.avg, 4),
+          median: round(frameStats.median, 4),
+          p95: round(frameStats.p95, 4),
+          min: round(frameStats.min, 4),
+          max: round(frameStats.max, 4)
+        },
+        physicsTimeMs: {
+          avg: round(physicsStats.avg, 4),
+          median: round(physicsStats.median, 4),
+          p95: round(physicsStats.p95, 4),
+          min: round(physicsStats.min, 4),
+          max: round(physicsStats.max, 4),
+          total: round(physicsStats.total, 4),
+          avgPerSubstep: round(physicsStats.avg / CFG.benchmarkSubsteps, 4)
+        },
+        solver: {
+          maxSpeedMps: round(maxSpeed, 4),
+          peakDensityRatio: round(maxDensity, 4)
+        },
+        anomalies: {
+          total: anomaliesTotal,
+          longFramesOver50ms: longFrames,
+          severeFramesOver250ms: severeFrames,
+          nonFiniteRecoveries: anomalyDelta.nonFinite,
+          escapedParticles: anomalyDelta.escapes,
+          neighborOverflows: anomalyDelta.neighborOverflow,
+          velocityGuardActivations: anomalyDelta.speedClamps
+        }
+      },
+      notes: [
+        "Each sampled frame executes exactly two fixed 1/120 s substeps and four PBF constraint iterations per substep.",
+        "Frame time includes browser rAF pacing and rendering; physics time measures the CPU solver block only.",
+        "The benchmark aborts on tab visibility changes and viewport resize to preserve fixed workload conditions."
+      ]
+    };
+
+    benchmark.results = result;
+    benchmark.phase = "complete";
+    benchmark.active = false;
+    benchmark.samplePrev = 0;
+    accumulator = 0;
+    setBenchmarkControlsDisabled(false);
+    ui.runBenchBtn.disabled = false;
+    ui.runBenchBtn.textContent = "RUN AGAIN";
+    ui.exportJsonBtn.disabled = false;
+    ui.exportCsvBtn.disabled = false;
+    setBenchStatus("complete", "COMPLETE", "P95 " + frameStats.p95.toFixed(2) + " MS", 100);
+
+    ui.lastRun.hidden = false;
+    ui.resultRunId.textContent = benchmark.runId.slice(-8);
+    ui.resultAnomalies.textContent = "ANOM " + anomaliesTotal;
+    ui.resultAvgFrame.textContent = frameStats.avg.toFixed(2) + " MS";
+    ui.resultP95Frame.textContent = frameStats.p95.toFixed(2) + " MS";
+    ui.resultAvgPhysics.textContent = physicsStats.avg.toFixed(2) + " MS";
+    ui.resultFps.textContent = avgFps.toFixed(1);
+    ui.resultDuration.textContent = (durationMs / 1000).toFixed(2) + " S";
+    ui.resultParticles.textContent = N.toLocaleString("en-US");
+
+    if (anomaliesTotal > 0) {
+      ui.resultAnomalies.style.color = "var(--hot)";
+    } else {
+      ui.resultAnomalies.style.color = "";
+    }
+  }
+
+  function abortBenchmark(reason) {
+    if (!benchmark.active) return;
+    benchmark.active = false;
+    benchmark.phase = "aborted";
+    accumulator = 0;
+    setBenchmarkControlsDisabled(false);
+    ui.runBenchBtn.disabled = false;
+    ui.runBenchBtn.textContent = "RUN BENCHMARK";
+    ui.exportJsonBtn.disabled = true;
+    ui.exportCsvBtn.disabled = true;
+    setBenchStatus("error", "ABORTED", reason, 0);
+    ui.lastRun.hidden = true;
+  }
+
+  function startBenchmark() {
+    if (benchmark.active) return;
+    if (document.hidden) {
+      setBenchStatus("error", "BLOCKED", "TAB NOT VISIBLE", 0);
+      return;
+    }
+    setGravity(CFG.benchmarkGravity);
+    setViscosity(CFG.benchmarkViscosity);
+    resetCamera();
+    fluid.reset(CFG.seed);
+    accumulator = 0;
+    recentFrames.length = 0;
+    recentPhysics.length = 0;
+    benchmark.active = true;
+    benchmark.phase = "warmup";
+    benchmark.warmupDone = 0;
+    benchmark.sampleDone = 0;
+    benchmark.samplePrev = 0;
+    benchmark.sampleStart = 0;
+    benchmark.anomalyStart = null;
+    benchmark.results = null;
+    benchmark.environment = getEnvironment();
+    benchmark.runId = makeRunId(new Date());
+    setBenchmarkControlsDisabled(true);
+    ui.runBenchBtn.disabled = true;
+    ui.runBenchBtn.textContent = "RUNNING";
+    ui.exportJsonBtn.disabled = true;
+    ui.exportCsvBtn.disabled = true;
+    clearBenchResultDisplay();
+    setBenchStatus("running", "WARM-UP", "0 / " + CFG.benchmarkWarmup, 0);
+    fluid.colorPass();
+  }
+
+  function updateHud(now) {
+    if (now - lastHudUpdate < 180) return;
+    lastHudUpdate = now;
+
+    const frameAvg = recentFrames.length ? mean(recentFrames) : 0;
+    const physicsAvg = recentPhysics.length ? mean(recentPhysics) : 0;
+    const fps = frameAvg > 0 ? 1000 / frameAvg : 0;
+    ui.fps.textContent = fps > 0 ? fps.toFixed(1) : "--.-";
+    ui.frameMs.textContent = frameAvg > 0 ? frameAvg.toFixed(2) : "--.--";
+    ui.physicsMs.textContent = physicsAvg > 0 ? physicsAvg.toFixed(2) : "--.--";
+    ui.simTime.textContent = formatSimTime(fluid.time);
+
+    if (benchmark.active) {
+      if (benchmark.phase === "warmup") {
+        const progress = benchmark.warmupDone / CFG.benchmarkWarmup * 18;
+        setBenchStatus("running", "WARM-UP", benchmark.warmupDone + " / " + CFG.benchmarkWarmup, progress);
+      } else if (benchmark.phase === "sampling") {
+        const progress = 18 + benchmark.sampleDone / CFG.benchmarkSamples * 82;
+        setBenchStatus("running", "SAMPLING", benchmark.sampleDone + " / " + CFG.benchmarkSamples, progress);
+      }
+    }
+
+    drawTrace();
+  }
+
+  function drawTrace() {
+    const canvas = ui.trace;
+    const ctx = traceCtx;
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    const yFor = (ms) => h - 2 - clamp(ms / traceMaxMs, 0, 1) * (h - 5);
+
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(84, 105, 111, 0.36)";
+    ctx.setLineDash([4, 5]);
+    const y16 = yFor(16.6667);
+    ctx.beginPath();
+    ctx.moveTo(0, y16);
+    ctx.lineTo(w, y16);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (recentFrames.length < 2) {
+      ctx.strokeStyle = "rgba(85, 222, 209, 0.34)";
+      ctx.beginPath();
+      ctx.moveTo(0, h - 2);
+      ctx.lineTo(w, h - 2);
+      ctx.stroke();
+      return;
+    }
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#55ded1";
+    ctx.beginPath();
+    for (let i = 0; i < recentFrames.length; i++) {
+      const x = (i / (traceSamples - 1)) * w;
+      const y = yFor(recentFrames[i]);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(85, 222, 209, 0.10)";
+    ctx.lineTo(w, h - 2);
+    ctx.lineTo(0, h - 2);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function downloadFile(content, filename, type) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.rel = "noopener";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
+  function exportJson() {
+    if (!benchmark.results) return;
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    downloadFile(
+      JSON.stringify(benchmark.results, null, 2),
+      "hydro-sph-bench_" + stamp + "_seed" + CFG.seed.toString(16).toUpperCase() + ".json",
+      "application/json"
+    );
+  }
+
+  function exportCsv() {
+    if (!benchmark.results) return;
+    const count = benchmark.sampleDone;
+    const lines = ["frame,elapsed_ms,frame_time_ms,physics_time_ms,instant_fps,max_speed_mps,max_density_ratio,active_particles,substeps_per_frame,solver_iterations"];
+    for (let i = 0; i < count; i++) {
+      const frameMs = benchmark.frameTimes[i];
+      const instantFps = frameMs > 0 ? 1000 / frameMs : 0;
+      lines.push([
+        i + 1,
+        benchmark.elapsedTimes[i].toFixed(4),
+        frameMs.toFixed(4),
+        benchmark.physicsTimes[i].toFixed(4),
+        instantFps.toFixed(3),
+        benchmark.maxSpeeds[i].toFixed(4),
+        benchmark.maxDensities[i].toFixed(4),
+        N,
+        CFG.benchmarkSubsteps,
+        CFG.solverIterations
+      ].join(","));
+    }
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    downloadFile(
+      lines.join("\n"),
+      "hydro-sph-bench_" + stamp + "_seed" + CFG.seed.toString(16).toUpperCase() + ".csv",
+      "text/csv;charset=utf-8"
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Input handling / camera
+  // ---------------------------------------------------------------------------
+
+  function bindControls() {
+    ui.gravity.addEventListener("input", () => {
+      if (benchmark.active) return;
+      setGravity(ui.gravity.value);
+    });
+    ui.viscosity.addEventListener("input", () => {
+      if (benchmark.active) return;
+      setViscosity(ui.viscosity.value);
+    });
+    ui.resetBtn.addEventListener("click", () => {
+      resetSimulation();
+    });
+    ui.runBenchBtn.addEventListener("click", () => {
+      if (!benchmark.active) startBenchmark();
+    });
+    ui.exportJsonBtn.addEventListener("click", exportJson);
+    ui.exportCsvBtn.addEventListener("click", exportCsv);
+
+    const canvas = gl.canvas;
+    canvas.addEventListener("pointerdown", (event) => {
+      if (benchmark.active) return;
+      if (event.button !== undefined && event.button !== 0) return;
+      dragging = true;
+      dragX = event.clientX;
+      dragY = event.clientY;
+      canvas.classList.add("dragging");
+      if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
+    });
+    canvas.addEventListener("pointermove", (event) => {
+      if (!dragging || benchmark.active) return;
+      const dx = event.clientX - dragX;
+      const dy = event.clientY - dragY;
+      dragX = event.clientX;
+      dragY = event.clientY;
+      camera.yaw -= dx * 0.0055;
+      camera.pitch = clamp(camera.pitch + dy * 0.0045, 0.035, 1.22);
+    });
+    const endDrag = (event) => {
+      dragging = false;
+      canvas.classList.remove("dragging");
+      if (event && event.pointerId !== undefined && canvas.releasePointerCapture) {
+        try { canvas.releasePointerCapture(event.pointerId); } catch (_) { /* pointer already released */ }
+      }
+    };
+    canvas.addEventListener("pointerup", endDrag);
+    canvas.addEventListener("pointercancel", endDrag);
+    canvas.addEventListener("lostpointercapture", () => {
+      dragging = false;
+      canvas.classList.remove("dragging");
+    });
+    canvas.addEventListener("wheel", (event) => {
+      if (benchmark.active) return;
+      event.preventDefault();
+      camera.distance = clamp(camera.distance * Math.exp(event.deltaY * 0.0011), 2.16, 6.4);
+    }, { passive: false });
+
+    window.addEventListener("keydown", (event) => {
+      if (benchmark.active) return;
+      if (event.key !== "r" && event.key !== "R") return;
+      const tag = document.activeElement && document.activeElement.tagName;
+      if (tag === "INPUT" || tag === "BUTTON" || tag === "TEXTAREA" || tag === "SELECT") return;
+      resetCamera();
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden && benchmark.active) {
+        abortBenchmark("TAB HIDDEN");
+      }
+    });
+
+    window.addEventListener("resize", () => {
+      if (renderer) renderer.resize();
+      if (benchmark.active) {
+        abortBenchmark("VIEWPORT CHANGED");
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Main loop
+  // ---------------------------------------------------------------------------
+
+  function stepFixed(count) {
+    let maxSpeed = 0;
+    let maxDensity = 0;
+    for (let s = 0; s < count; s++) {
+      fluid.step(CFG.fixedDt, simSettings.gravity, simSettings.viscosity);
+      if (fluid.lastMaxSpeed > maxSpeed) maxSpeed = fluid.lastMaxSpeed;
+      if (fluid.lastPeakDensity > maxDensity) maxDensity = fluid.lastPeakDensity;
+    }
+    return { maxSpeed, maxDensity };
+  }
+
+  function frameLoop(now) {
+    requestAnimationFrame(frameLoop);
+    processFrame(now);
+  }
+
+  function processFrame(now) {
+    let rawFrameMs = now - lastFrameStamp;
+    lastFrameStamp = now;
+    if (!Number.isFinite(rawFrameMs) || rawFrameMs < 0) rawFrameMs = 0;
+    if (rawFrameMs > 0) {
+      recentFrames.push(rawFrameMs);
+      if (recentFrames.length > traceSamples) recentFrames.shift();
+    }
+
+    let physicsStarted = 0;
+    let physicsElapsed = 0;
+    let stepsThisFrame = 0;
+    let frameMaxSpeed = 0;
+    let frameMaxDensity = 0;
+
+    if (benchmark.active) {
+      if (benchmark.phase === "warmup") {
+        physicsStarted = performance.now();
+        const stats = stepFixed(CFG.benchmarkSubsteps);
+        physicsElapsed = performance.now() - physicsStarted;
+        stepsThisFrame = CFG.benchmarkSubsteps;
+        frameMaxSpeed = stats.maxSpeed;
+        frameMaxDensity = stats.maxDensity;
+        benchmark.warmupDone++;
+        if (benchmark.warmupDone >= CFG.benchmarkWarmup) {
+          benchmark.phase = "sampling";
+          benchmark.samplePrev = now;
+          benchmark.sampleStart = now;
+          benchmark.sampleDone = 0;
+          benchmark.anomalyStart = {
+            nonFinite: fluid.anomalyCounts.nonFinite,
+            escapes: fluid.anomalyCounts.escapes,
+            speedClamps: fluid.anomalyCounts.speedClamps,
+            neighborOverflow: fluid.anomalyCounts.neighborOverflow
+          };
+          setBenchStatus("running", "SAMPLING", "0 / " + CFG.benchmarkSamples, 18);
+        }
+      } else if (benchmark.phase === "sampling") {
+        physicsStarted = performance.now();
+        const stats = stepFixed(CFG.benchmarkSubsteps);
+        physicsElapsed = performance.now() - physicsStarted;
+        stepsThisFrame = CFG.benchmarkSubsteps;
+        frameMaxSpeed = stats.maxSpeed;
+        frameMaxDensity = stats.maxDensity;
+
+        const index = benchmark.sampleDone;
+        const frameDelta = Math.max(0, now - benchmark.samplePrev);
+        benchmark.frameTimes[index] = frameDelta;
+        benchmark.physicsTimes[index] = physicsElapsed;
+        benchmark.elapsedTimes[index] = now - benchmark.sampleStart;
+        benchmark.maxSpeeds[index] = frameMaxSpeed;
+        benchmark.maxDensities[index] = frameMaxDensity;
+        benchmark.sampleDone++;
+        benchmark.samplePrev = now;
+
+        if (benchmark.sampleDone >= CFG.benchmarkSamples) {
+          physicsElapsed = performance.now() - physicsStarted;
+          finalizeBenchmark(now);
+        }
+      }
+    } else {
+      const elapsed = Math.min(rawFrameMs, 50) / 1000;
+      accumulator += elapsed;
+      const maxSteps = CFG.maxSubsteps;
+      physicsStarted = performance.now();
+      while (accumulator >= CFG.fixedDt && stepsThisFrame < maxSteps) {
+        fluid.step(CFG.fixedDt, simSettings.gravity, simSettings.viscosity);
+        accumulator -= CFG.fixedDt;
+        stepsThisFrame++;
+      }
+      if (stepsThisFrame === maxSteps && accumulator >= CFG.fixedDt) {
+        accumulator = 0;
+      }
+      physicsElapsed = performance.now() - physicsStarted;
+    }
+
+    if (stepsThisFrame > 0) {
+      fluid.colorPass();
+      recentPhysics.push(physicsElapsed);
+      if (recentPhysics.length > 30) recentPhysics.shift();
+    }
+
+    renderer.render(fluid, camera);
+    updateHud(now);
+
+    if (!bootClosed) {
+      bootClosed = true;
+      const boot = $("boot");
+      if (boot) {
+        boot.classList.add("hidden");
+        setTimeout(() => {
+          if (boot.parentNode) boot.style.display = "none";
+        }, 420);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Initialization
+  // ---------------------------------------------------------------------------
+
+  function init() {
+    const canvas = $("stage");
+    gl = canvas.getContext("webgl2", {
+      alpha: false,
+      antialias: true,
+      depth: true,
+      stencil: false,
+      powerPreference: "high-performance",
+      preserveDrawingBuffer: false,
+      desynchronized: false
+    });
+
+    if (!gl) {
+      bootFailure("WEBGL2 CONTEXT UNAVAILABLE");
+      return;
+    }
+
+    canvas.addEventListener("webglcontextlost", (event) => {
+      event.preventDefault();
+      if (benchmark.active) abortBenchmark("WEBGL CONTEXT LOST");
+      bootFailure("WEBGL CONTEXT LOST");
+    });
+    canvas.addEventListener("webglcontextrestored", () => {
+      window.location.reload();
+    });
+
+    fluid = new SPHFluid(CFG);
+    renderer = new FluidRenderer(gl);
+    renderer.resize();
+    renderer.updateCamera(camera);
+    renderer.uploadParticles(fluid);
+
+    ui.particleCount.textContent = N.toLocaleString("en-US");
+    setGravity(CFG.gravityDefault);
+    setViscosity(CFG.viscosityDefault);
+    syncRange(ui.gravity);
+    syncRange(ui.viscosity);
+    bindControls();
+
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => {
+        if (!renderer) return;
+        renderer.resize();
+        if (benchmark.active) abortBenchmark("VIEWPORT CHANGED");
+      });
+      resizeObserver.observe(canvas);
+    }
+
+    fluid.colorPass();
+    lastFrameStamp = performance.now();
+    requestAnimationFrame(frameLoop);
+  }
+
+  try {
+    init();
+  } catch (error) {
+    console.error(error);
+    bootFailure("INITIALIZATION FAULT · " + (error && error.message ? error.message : "UNKNOWN"));
+  }
+})();
+</script>
+</body>
+</html>
