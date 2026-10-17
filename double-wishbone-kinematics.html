@@ -1,0 +1,1801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:,">
+<title>DWK-2 · Double Wishbone Kinematics</title>
+<style>
+  :root{
+    --bg:#070a0c;
+    --viewport:#080c0f;
+    --panel:#0b1013;
+    --panel-2:#0e1418;
+    --line:#1a2429;
+    --line-2:#26333a;
+    --txt:#c2cfd6;
+    --txt-hi:#e3edf2;
+    --dim:#67767f;
+    --dim-2:#435159;
+    --amber:#ffb020;
+    --amber-dim:#8a5c0d;
+    --cyan:#42c2d4;
+    --red:#ff5d4d;
+    --green:#7ad68d;
+    --sans:"Bahnschrift","DIN Alternate","Arial Narrow","Segoe UI",system-ui,sans-serif;
+    --mono:"Cascadia Mono","Consolas","SF Mono",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;border-radius:0!important}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg);color:var(--txt);
+    font-family:var(--sans);font-size:12px;line-height:1.35;
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+    user-select:none;
+  }
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .app{
+    height:100vh;display:grid;
+    grid-template-columns:276px minmax(0,1fr) 326px;
+    grid-template-rows:50px minmax(0,1fr) 26px;
+  }
+  /* ---------- header ---------- */
+  header{
+    grid-column:1/-1;display:flex;align-items:center;gap:14px;
+    padding:0 16px 0 19px;background:var(--panel);
+    border-bottom:1px solid var(--line);position:relative;min-width:0;
+  }
+  header::before{content:"";position:absolute;left:0;top:0;width:3px;height:100%;background:var(--amber)}
+  .brand-tag{
+    font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.06em;
+    color:#080b0d;background:var(--amber);padding:4px 7px 3px;
+  }
+  .brand{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .brand .title{
+    font-size:13px;font-weight:600;letter-spacing:.19em;color:var(--txt-hi);
+    white-space:nowrap;
+  }
+  .brand .sub{
+    font-family:var(--mono);font-size:8px;letter-spacing:.13em;color:var(--dim);
+    white-space:nowrap;
+  }
+  .hdr-sep{width:1px;height:22px;background:var(--line-2);margin-left:4px}
+  .hdr-note{
+    font-family:var(--mono);font-size:8px;letter-spacing:.14em;color:var(--dim-2);
+    white-space:nowrap;
+  }
+  .status{margin-left:auto;display:flex;align-items:center;gap:22px;white-space:nowrap}
+  .stat{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:8px;letter-spacing:.12em;color:var(--dim)}
+  .stat b{font-weight:400;color:#b9c6cd;letter-spacing:.06em}
+  .led{width:5px;height:5px;background:var(--green);display:inline-block}
+  /* ---------- panels ---------- */
+  aside{background:var(--panel);min-height:0;overflow-y:auto;overflow-x:hidden}
+  aside::-webkit-scrollbar{width:8px}
+  aside::-webkit-scrollbar-track{background:transparent}
+  aside::-webkit-scrollbar-thumb{background:#1e292f;border:2px solid var(--panel)}
+  #left{border-right:1px solid var(--line)}
+  #right{border-left:1px solid var(--line)}
+  .sec{border-bottom:1px solid var(--line)}
+  .sec-h{
+    display:flex;align-items:center;gap:9px;padding:10px 12px 9px;
+    border-bottom:1px solid var(--line);
+    font-size:9px;letter-spacing:.17em;color:#8e9ca5;font-weight:600;
+  }
+  .sec-h .idx{
+    font-family:var(--mono);font-size:8px;letter-spacing:.04em;color:var(--amber);
+    font-weight:400;
+  }
+  .sec-h .r{margin-left:auto;font-family:var(--mono);font-size:8px;color:var(--dim-2);letter-spacing:.08em;font-weight:400}
+  .sec-b{padding:12px}
+  /* controls */
+  .ctrl{margin-bottom:15px}
+  .ctrl:last-child{margin-bottom:0}
+  .ctrl-top{display:flex;align-items:baseline;margin-bottom:6px;gap:8px}
+  .ctrl-top label{font-size:9px;letter-spacing:.14em;color:#93a1a9;font-weight:600}
+  .ctrl-top .read{margin-left:auto;display:flex;align-items:baseline;gap:4px}
+  .ctrl-top .val{font-family:var(--mono);font-size:13px;color:var(--amber);font-variant-numeric:tabular-nums}
+  .ctrl-top .unit{font-family:var(--mono);font-size:8px;color:var(--dim);letter-spacing:.05em}
+  .mini{
+    width:18px;height:16px;padding:0;font-family:var(--mono);font-size:8px;
+    color:var(--dim);border:1px solid var(--line-2);background:var(--panel-2);
+    cursor:pointer;line-height:14px;
+  }
+  .mini:hover{color:var(--amber);border-color:#4c3c1c;background:#151108}
+  .range-wrap{position:relative;padding-top:1px}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;display:block;width:100%;
+    height:16px;margin:0;background:transparent;cursor:ew-resize;
+  }
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:#27323a}
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:7px;height:15px;background:var(--amber);
+    border:0;margin-top:-6.5px;cursor:ew-resize;
+  }
+  input[type=range]::-moz-range-track{height:2px;background:#27323a}
+  input[type=range]::-moz-range-thumb{width:7px;height:15px;background:var(--amber);border:0;border-radius:0;cursor:ew-resize}
+  input[type=range]:focus{outline:none}
+  .center-tick{
+    position:absolute;left:50%;top:8px;width:1px;height:6px;
+    background:#46555e;pointer-events:none;
+  }
+  .ticks{
+    display:flex;justify-content:space-between;
+    font-family:var(--mono);font-size:7px;letter-spacing:.06em;color:#4b5961;
+    margin-top:1px;
+  }
+  .ticks .cap{color:#5d6c75;letter-spacing:.1em}
+  /* buttons */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+  .grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px}
+  button{
+    font-family:var(--sans);font-size:9px;font-weight:600;letter-spacing:.12em;
+    text-transform:uppercase;color:#aab8bf;
+    background:var(--panel-2);border:1px solid var(--line-2);
+    padding:7px 6px;cursor:pointer;white-space:nowrap;border-radius:0;
+  }
+  button:hover{color:var(--txt-hi);border-color:#3b4a53;background:#10171b}
+  button.active{color:var(--amber);border-color:#6c4d13;background:#171207}
+  button:active{transform:none}
+  .btn-wide{width:100%;margin-top:4px;padding:8px 6px;letter-spacing:.16em}
+  .btn-stop{color:#8b9aa2}
+  .toggles{display:flex;flex-direction:column;gap:7px;margin-top:12px;padding-top:11px;border-top:1px solid var(--line)}
+  .tog{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:8px;letter-spacing:.12em;color:#8b9aa2;text-transform:uppercase}
+  .tog input{position:absolute;opacity:0;pointer-events:none}
+  .tog .box{
+    width:10px;height:10px;flex:0 0 10px;border:1px solid #46555e;background:#090d10;
+    position:relative;display:inline-block;
+  }
+  .tog input:checked + .box{background:var(--amber);border-color:var(--amber)}
+  .tog input:checked + .box::after{
+    content:"";position:absolute;inset:3px;background:#0b0f11;
+  }
+  .tog:hover span:last-child{color:var(--txt-hi)}
+  .rate-row{display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:11px;border-top:1px solid var(--line)}
+  .rate-row label{font-size:8px;letter-spacing:.13em;color:#7c8a93;text-transform:uppercase}
+  .rate-row .read{margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--amber)}
+  .rate-row input[type=range]{flex:1;width:auto}
+  /* model notes */
+  .note{
+    padding:10px 12px 12px;font-family:var(--mono);font-size:8px;line-height:1.75;
+    color:#5f6e77;letter-spacing:.03em;
+  }
+  .note b{color:#98a7b0;font-weight:400}
+  .legend{display:flex;flex-direction:column;gap:6px;padding:11px 12px 14px;border-top:1px solid var(--line)}
+  .legend .li{display:flex;align-items:center;gap:9px;font-size:8px;letter-spacing:.1em;color:#697880}
+  .sw{width:16px;height:0;border-top:2px solid #d2dfe6;display:inline-block;flex:0 0 16px}
+  .sw.spring{border-top:2px solid var(--amber)}
+  .sw.node{width:7px;height:7px;border:1px solid #d2dfe6;background:transparent;flex:0 0 7px;margin:0 4px}
+  .sw.kingpin{border-top:1px dashed var(--red)}
+  .sw.path{border-top:1px dotted var(--cyan)}
+  .sw.deform{border-top:0;height:8px;background:
+    repeating-linear-gradient(90deg,var(--amber) 0 1px,transparent 1px 3px)}
+  /* viewport */
+  main{position:relative;min-width:0;min-height:0;background:var(--viewport);overflow:hidden}
+  #stage{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+  #stage.dragging{cursor:grabbing}
+  .vp-info{
+    position:absolute;left:16px;top:14px;border:1px solid #1c262c;
+    background:rgba(7,11,13,.76);padding:7px 10px 6px;pointer-events:none;
+  }
+  .vp-info .r{display:flex;justify-content:space-between;gap:22px;font-family:var(--mono);font-size:7px;letter-spacing:.13em;color:#56656e;padding:2px 0}
+  .vp-info b{font-weight:400;color:#b4c1c8;letter-spacing:.04em;font-size:8px}
+  .vp-note{
+    position:absolute;left:16px;bottom:13px;font-family:var(--mono);font-size:7px;
+    letter-spacing:.13em;color:#44525a;pointer-events:none;
+  }
+  .corner{position:absolute;width:14px;height:14px;border:0 solid #202c33;pointer-events:none}
+  .corner.tl{left:8px;top:8px;border-top-width:1px;border-left-width:1px}
+  .corner.tr{right:8px;top:8px;border-top-width:1px;border-right-width:1px}
+  .corner.bl{left:8px;bottom:8px;border-bottom-width:1px;border-left-width:1px}
+  .corner.br{right:8px;bottom:8px;border-bottom-width:1px;border-right-width:1px}
+  /* right panel */
+  .metric-head{
+    display:grid;grid-template-columns:1fr 92px 56px;
+    font-family:var(--mono);font-size:7px;letter-spacing:.11em;color:#4c5a63;
+    padding:0 0 5px;
+  }
+  .metric-head span:nth-child(2),.metric-head span:nth-child(3){text-align:right}
+  .mrow{
+    display:grid;grid-template-columns:1fr 92px 56px;align-items:baseline;
+    padding:3.5px 0;border-top:1px solid #131b1f;
+  }
+  .mrow .k{font-size:8px;letter-spacing:.1em;color:#7b8a93;white-space:nowrap}
+  .mrow .v{font-family:var(--mono);font-size:10px;text-align:right;color:#d3dfe5;font-variant-numeric:tabular-nums}
+  .mrow .d{font-family:var(--mono);font-size:8px;text-align:right;color:#55646c;font-variant-numeric:tabular-nums}
+  .mrow.key .v{color:var(--amber)}
+  .mrow.key .k{color:#a9b7be}
+  .foot-note{padding:8px 12px 10px;font-family:var(--mono);font-size:7px;line-height:1.6;letter-spacing:.05em;color:#4e5c65;border-top:1px solid #131b1f}
+  .chart{margin-top:8px;border:1px solid #162025;background:#080c0f;padding:5px 6px 0}
+  .chart:first-of-type{margin-top:0}
+  .chart .cap{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--mono);font-size:7px;letter-spacing:.1em;color:#5d6c75;padding:1px 2px 3px}
+  .chart .cap b{font-weight:400;color:var(--cyan);font-size:8px}
+  .chart.toe .cap b{color:var(--amber)}
+  .chart canvas{display:block;width:100%;height:70px}
+  .diag{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px;padding:10px 12px 12px}
+  .diag .d{display:flex;justify-content:space-between;gap:6px;border-bottom:1px solid #121a1e;padding:3px 0;font-family:var(--mono);font-size:7px;letter-spacing:.05em;color:#56656e}
+  .diag .d b{font-weight:400;color:#b2c0c7;font-size:8px}
+  .diag .d.full{grid-column:1/-1}
+  .ok{color:var(--green)!important}
+  .warn{color:var(--amber)!important}
+  /* footer */
+  footer{
+    grid-column:1/-1;display:flex;align-items:center;gap:0;
+    padding:0 14px;border-top:1px solid var(--line);background:var(--panel);
+    font-family:var(--mono);font-size:7px;letter-spacing:.12em;color:#4d5b64;
+  }
+  footer .sep{margin:0 9px;color:#2b363d}
+  footer .right{margin-left:auto;display:flex;align-items:center;gap:9px}
+  footer .right b{font-weight:400;color:#8d9ba4}
+  .kbd{color:#8d9ba4}
+  @media (max-width:1360px){
+    .app{grid-template-columns:248px minmax(0,1fr) 300px}
+    .hdr-note{display:none}
+    .metric-head,.mrow{grid-template-columns:1fr 84px 48px}
+  }
+  @media (max-width:1150px){
+    .app{grid-template-columns:230px minmax(0,1fr) 284px}
+    .brand .sub{display:none}
+    .status{gap:13px}
+    .stat:nth-child(2){display:none}
+  }
+  @media (max-height:760px){
+    .sec-b{padding:10px 12px}
+    .chart canvas{height:58px}
+    .note{line-height:1.55}
+    .legend{gap:4px}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="brand-tag">DWK-2</div>
+    <div class="brand">
+      <div class="title">DOUBLE WISHBONE KINEMATICS</div>
+      <div class="sub">FRONT-LEFT CORNER · RIGID-LINK TEST RIG · 2 INPUT DOF</div>
+    </div>
+    <div class="hdr-sep"></div>
+    <div class="hdr-note">CONSTRAINT SOLVER / NEWTON</div>
+    <div class="status">
+      <div class="stat"><span class="led"></span>SOLVER READY</div>
+      <div class="stat">EQ <b>03</b> · UNK <b>03</b></div>
+      <div class="stat">UNITS <b>mm / deg</b></div>
+    </div>
+  </header>
+
+  <aside id="left">
+    <div class="sec">
+      <div class="sec-h"><span class="idx">01</span>SUSPENSION INPUT<span class="r">RIG</span></div>
+      <div class="sec-b">
+        <div class="ctrl">
+          <div class="ctrl-top">
+            <label>WHEEL TRAVEL</label>
+            <div class="read"><span class="val" id="travelVal">0.0</span><span class="unit">mm</span></div>
+            <button class="mini" id="zeroTravel" title="Zero wheel travel">0</button>
+          </div>
+          <div class="range-wrap">
+            <input id="travel" type="range" min="-80" max="80" step="0.5" value="0" aria-label="Wheel travel">
+            <div class="center-tick"></div>
+          </div>
+          <div class="ticks"><span class="cap">REBOUND</span><span>−40</span><span>0</span><span>+40</span><span class="cap">BUMP</span></div>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-top">
+            <label>RACK TRAVEL</label>
+            <div class="read"><span class="val" id="rackVal">0.0</span><span class="unit">mm</span></div>
+            <button class="mini" id="zeroRack" title="Center steering rack">0</button>
+          </div>
+          <div class="range-wrap">
+            <input id="rack" type="range" min="-55" max="55" step="0.5" value="0" aria-label="Steering rack travel">
+            <div class="center-tick"></div>
+          </div>
+          <div class="ticks"><span class="cap">INBOARD</span><span>−40</span><span>0</span><span>+40</span><span class="cap">OUTBOARD</span></div>
+        </div>
+        <button class="btn-wide" id="resetPose">RESTORE STATIC</button>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h"><span class="idx">02</span>VIEW<span class="r">CAM</span></div>
+      <div class="sec-b">
+        <div class="grid4">
+          <button data-view="iso" class="active">ISO</button>
+          <button data-view="front">FRONT</button>
+          <button data-view="side">SIDE</button>
+          <button data-view="top">TOP</button>
+        </div>
+        <div class="toggles">
+          <label class="tog"><input type="checkbox" id="togKingpin" checked><span class="box"></span><span>Kingpin axis + measure</span></label>
+          <label class="tog"><input type="checkbox" id="togPaths" checked><span class="box"></span><span>Motion loci</span></label>
+          <label class="tog"><input type="checkbox" id="togLabels" checked><span class="box"></span><span>Annotations</span></label>
+          <label class="tog"><input type="checkbox" id="togGrid" checked><span class="box"></span><span>Datum grid</span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h"><span class="idx">03</span>MOTION<span class="r">AUTO</span></div>
+      <div class="sec-b">
+        <div class="grid2">
+          <button data-anim="bump">BUMP SWEEP</button>
+          <button data-anim="steer">STEER SWEEP</button>
+          <button data-anim="combined">COMBINED</button>
+          <button id="stopAnim" class="btn-stop">STOP</button>
+        </div>
+        <div class="rate-row">
+          <label>RATE</label>
+          <input type="range" id="rate" min="0.25" max="2" step="0.25" value="1" aria-label="Playback rate">
+          <div class="read" id="rateVal">1.00×</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h"><span class="idx">04</span>MODEL BASIS<span class="r">KIN</span></div>
+      <div class="note">
+        Solver maintains <b>3 constraint residuals</b>: upper ball-joint length on the
+        UCA arc, lower ball-joint length on the LCA arc, and tie-rod length to the
+        steering rack. Wheel-center height is driven; steering is imposed by rack
+        translation. No keyframes — every pose is solved.
+      </div>
+      <div class="legend">
+        <div class="li"><span class="sw"></span>RIGID LINK / LENGTH CONSTRAINED</div>
+        <div class="li"><span class="sw deform"></span>DEFORMABLE / SPRING ELEMENT</div>
+        <div class="li"><span class="sw node"></span>KINEMATIC NODE</div>
+        <div class="li"><span class="sw kingpin"></span>KINGPIN (STEERING AXIS)</div>
+        <div class="li"><span class="sw path"></span>MOTION LOCUS</div>
+      </div>
+    </div>
+  </aside>
+
+  <main id="viewport">
+    <canvas id="stage"></canvas>
+    <div class="corner tl"></div><div class="corner tr"></div>
+    <div class="corner bl"></div><div class="corner br"></div>
+    <div class="vp-info">
+      <div class="r"><span>VIEW</span><b id="oView">ISO</b></div>
+      <div class="r"><span>PROJ</span><b id="oProj">PERSPECTIVE</b></div>
+      <div class="r"><span>CAMERA</span><b id="oCam">AZ 52 / EL 20</b></div>
+      <div class="r"><span>DIST</span><b id="oDist">2.50 m</b></div>
+    </div>
+    <div class="vp-note">CHASSIS FIXED · WHEEL PAD TRACKS CONTACT PATCH · DATUM z = 0</div>
+  </main>
+
+  <aside id="right">
+    <div class="sec">
+      <div class="sec-h"><span class="idx">A</span>KINEMATIC STATE<span class="r">LIVE</span></div>
+      <div class="sec-b" style="padding-bottom:6px">
+        <div class="metric-head"><span>MEASUREMENT</span><span>CURRENT</span><span>Δ STATIC</span></div>
+        <div class="mrow key"><span class="k">CAMBER</span><span class="v" id="vCamber">—</span><span class="d" id="dCamber">—</span></div>
+        <div class="mrow key"><span class="k">TOE / STEER</span><span class="v" id="vToe">—</span><span class="d" id="dToe">—</span></div>
+        <div class="mrow"><span class="k">CASTER</span><span class="v" id="vCaster">—</span><span class="d" id="dCaster">—</span></div>
+        <div class="mrow"><span class="k">KINGPIN INCL.</span><span class="v" id="vKpi">—</span><span class="d" id="dKpi">—</span></div>
+        <div class="mrow"><span class="k">SCRUB RADIUS</span><span class="v" id="vScrub">—</span><span class="d" id="dScrub">—</span></div>
+        <div class="mrow"><span class="k">MECH. TRAIL</span><span class="v" id="vTrail">—</span><span class="d" id="dTrail">—</span></div>
+        <div class="mrow"><span class="k">SPRING LENGTH</span><span class="v" id="vSpring">—</span><span class="d" id="dSpring">—</span></div>
+        <div class="mrow"><span class="k">MOTION RATIO</span><span class="v" id="vMr">—</span><span class="d" id="dMr">—</span></div>
+        <div class="mrow"><span class="k">HALF-TRACK Δ</span><span class="v" id="vTrack">—</span><span class="d" id="dTrack">—</span></div>
+        <div class="mrow"><span class="k">CAMBER GAIN</span><span class="v" id="vCamGain">—</span><span class="d">—</span></div>
+        <div class="mrow"><span class="k">BUMP STEER</span><span class="v" id="vBumpSteer">—</span><span class="d">—</span></div>
+      </div>
+      <div class="foot-note">CAMBER + = TOP OUTBOARD · TOE + = INBOARD (LEFT WHEEL)<br>RATES NORMALISED TO 25 mm WHEEL TRAVEL</div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h"><span class="idx">B</span>SWEEP RESPONSE<span class="r">−80…+80</span></div>
+      <div class="sec-b">
+        <div class="chart">
+          <div class="cap"><span>CAMBER vs TRAVEL [deg]</span><b id="camNow">—</b></div>
+          <canvas id="chartCamber"></canvas>
+        </div>
+        <div class="chart toe">
+          <div class="cap"><span>TOE vs TRAVEL [deg]</span><b id="toeNow">—</b></div>
+          <canvas id="chartToe"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h"><span class="idx">C</span>SOLVER<span class="r">3×3</span></div>
+      <div class="diag">
+        <div class="d"><span>ITER</span><b id="dgIter">—</b></div>
+        <div class="d"><span>RESIDUAL</span><b id="dgRes">—</b></div>
+        <div class="d"><span>SOLVE</span><b id="dgMs">—</b></div>
+        <div class="d"><span>SWEEP</span><b id="dgSweep">—</b></div>
+        <div class="d full"><span>STATUS</span><b id="dgStatus" class="ok">CONVERGED</b></div>
+      </div>
+    </div>
+  </aside>
+
+  <footer>
+    <span><span class="kbd">LMB</span> ORBIT</span><span class="sep">/</span>
+    <span><span class="kbd">RMB</span> PAN</span><span class="sep">/</span>
+    <span><span class="kbd">WHEEL</span> ZOOM</span><span class="sep">/</span>
+    <span><span class="kbd">1–4</span> VIEWS</span><span class="sep">/</span>
+    <span><span class="kbd">SPACE</span> RUN</span><span class="sep">/</span>
+    <span><span class="kbd">R</span> RESET</span>
+    <div class="right">
+      <span>DWK-2 / KIN RIG</span><span class="sep">/</span>
+      <b id="fps">60</b><span>FPS</span>
+    </div>
+  </footer>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+// ============================ SOLVER CORE (START) ============================
+const PI = Math.PI, TAU = PI*2, D2R = PI/180, R2D = 180/PI;
+const abs = Math.abs, min = Math.min, max = Math.max;
+
+function vadd(a,b){ return [a[0]+b[0], a[1]+b[1], a[2]+b[2]]; }
+function vsub(a,b){ return [a[0]-b[0], a[1]-b[1], a[2]-b[2]]; }
+function vmul(a,s){ return [a[0]*s, a[1]*s, a[2]*s]; }
+function vdot(a,b){ return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]; }
+function vcross(a,b){
+  return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+}
+function vlen(a){ return Math.hypot(a[0],a[1],a[2]); }
+function vdist(a,b){ return Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]); }
+function vnorm(a){
+  const l = Math.hypot(a[0],a[1],a[2]) || 1;
+  return [a[0]/l, a[1]/l, a[2]/l];
+}
+function vlerp(a,b,t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
+function clamp(v,lo,hi){ return v<lo?lo:(v>hi?hi:v); }
+
+// Rodrigues rotation of p around (origin, axis) by ang
+function vrot(p, origin, axis, ang){
+  const u = vnorm(axis);
+  const q = vsub(p, origin);
+  const c = Math.cos(ang), s = Math.sin(ang);
+  const d = vdot(u,q);
+  const cr = vcross(u,q);
+  return [
+    origin[0] + q[0]*c + cr[0]*s + u[0]*d*(1-c),
+    origin[1] + q[1]*c + cr[1]*s + u[1]*d*(1-c),
+    origin[2] + q[2]*c + cr[2]*s + u[2]*d*(1-c)
+  ];
+}
+// rotate vector by the minimal rotation that takes direction a to b
+function vrotBetween(vec, a, b){
+  const ua = vnorm(a), ub = vnorm(b);
+  const c = clamp(vdot(ua,ub), -1, 1);
+  if (c > 1 - 1e-12) return vec.slice();
+  let axis, ang;
+  if (c < -1 + 1e-12){
+    axis = vcross(ua, abs(ua[0]) < 0.9 ? [1,0,0] : [0,1,0]);
+    ang = PI;
+  } else {
+    axis = vcross(ua, ub);
+    ang = Math.atan2(vlen(axis), c);
+  }
+  return vrot(vec, [0,0,0], axis, ang);
+}
+
+// ------------------------------ geometry ------------------------------
+const GEO = {
+  LBJ:      [0,   690, 160],
+  UBJ:      [-40, 640, 490],
+  WC:       [0,   760, 320],
+  TRE:      [115, 645, 250],
+  RACK:     [115, 255, 225],
+  LCA_F:    [120, 290, 140],
+  LCA_R:    [-140, 300, 160],
+  UCA_F:    [85,  295, 425],
+  UCA_R:    [-105,305, 450],
+  SPRING_LO:[-4.8,500.4,155.2],
+  SPRING_HI:[-10, 340, 650],
+  TIRE_R:  320,
+  RIM_R:   225,
+  WHEEL_HALF: 112,
+  CAMBER0: -0.5
+};
+const LBJ0 = GEO.LBJ, UBJ0 = GEO.UBJ, WC0 = GEO.WC, TRE0 = GEO.TRE, RACK0 = GEO.RACK;
+const LCA_F = GEO.LCA_F, LCA_R = GEO.LCA_R, UCA_F = GEO.UCA_F, UCA_R = GEO.UCA_R;
+const LS0 = GEO.SPRING_LO, US0 = GEO.SPRING_HI;
+const L_KNUCKLE = vdist(UBJ0, LBJ0);
+const L_TIE = vdist(TRE0, RACK0);
+const CAM0 = GEO.CAMBER0*D2R;
+const AXLE0 = [0, Math.cos(CAM0), -Math.sin(CAM0)];
+const FWD0 = [1,0,0];
+const UP0 = vcross(FWD0, AXLE0);
+const TRAVEL_MIN = -80, TRAVEL_MAX = 80;
+const RACK_MIN = -55, RACK_MAX = 55;
+const FLOOR_Z = -120;
+
+// Outer ball joint / spring mount point of an arm rotating about its inner axis.
+function armPoint(design, innerA, innerB, ang){
+  return vrot(design, innerA, vsub(innerB, innerA), ang);
+}
+function armAxisDir(innerA, innerB){ return vnorm(vsub(innerB, innerA)); }
+
+// Rigid knuckle: align design kingpin to current kingpin, then steer about it.
+function knuckleXform(ubj, lbj, steer){
+  const from = vsub(UBJ0, LBJ0), to = vsub(ubj, lbj);
+  const axis = vnorm(to);
+  const point = p => {
+    const q = vadd(lbj, vrotBetween(vsub(p, LBJ0), from, to));
+    return vrot(q, lbj, axis, steer);
+  };
+  const dir = d => vrot(vrotBetween(d, from, to), [0,0,0], axis, steer);
+  return {point, dir};
+}
+
+function residualAt(th, travel, rack, store){
+  const ubj = armPoint(UBJ0, UCA_F, UCA_R, th[0]);
+  const lbj = armPoint(LBJ0, LCA_F, LCA_R, th[1]);
+  const kt = knuckleXform(ubj, lbj, th[2]);
+  const wc = kt.point(WC0);
+  const tre = kt.point(TRE0);
+  const rackEnd = [RACK0[0], RACK0[1] + rack, RACK0[2]];
+  const r = [
+    vdist(ubj, lbj) - L_KNUCKLE,
+    wc[2] - (WC0[2] + travel),
+    vdist(tre, rackEnd) - L_TIE
+  ];
+  if (store){
+    store.r = r; store.ubj = ubj; store.lbj = lbj; store.wc = wc;
+    store.tre = tre; store.rackEnd = rackEnd; store.kt = kt;
+  }
+  return r;
+}
+function maxRes(r){ return Math.max(abs(r[0]), abs(r[1]), abs(r[2])); }
+
+function solve3(A, b){
+  const M = [A[0].slice(), A[1].slice(), A[2].slice()];
+  const x = b.slice();
+  for (let c=0;c<3;c++){
+    let piv = c;
+    for (let r=c+1;r<3;r++) if (abs(M[r][c]) > abs(M[piv][c])) piv = r;
+    if (abs(M[piv][c]) < 1e-12) return null;
+    if (piv !== c){
+      const t = M[piv]; M[piv] = M[c]; M[c] = t;
+      const tx = x[piv]; x[piv] = x[c]; x[c] = tx;
+    }
+    for (let r=c+1;r<3;r++){
+      const f = M[r][c] / M[c][c];
+      for (let k=c;k<3;k++) M[r][k] -= f*M[c][k];
+      x[r] -= f*x[c];
+    }
+  }
+  const o = [0,0,0];
+  for (let r=2;r>=0;r--){
+    let s = x[r];
+    for (let c=r+1;c<3;c++) s -= M[r][c]*o[c];
+    o[r] = s/M[r][r];
+  }
+  return o;
+}
+
+// Newton solve for [UCA angle, LCA angle, knuckle steer about kingpin]
+function solveCorner(travel, rack, seed){
+  let th = seed ? [seed[0], seed[1], seed[2]] : [0,0,0];
+  const stored = {r:[0,0,0]};
+  let r = residualAt(th, travel, rack, stored);
+  let err = maxRes(r);
+  let iters = 0;
+  const h = 1e-5;
+
+  for (; iters < 16; iters++){
+    if (err < 1e-9) break;
+    const J = [[0,0,0],[0,0,0],[0,0,0]];
+    for (let j=0;j<3;j++){
+      const t2 = [th[0],th[1],th[2]];
+      t2[j] += h;
+      const r2 = residualAt(t2, travel, rack, null);
+      for (let i=0;i<3;i++) J[i][j] = (r2[i]-r[i])/h;
+    }
+    const d = solve3(J, [-r[0], -r[1], -r[2]]);
+    if (!d) break;
+    let step = 1;
+    const mx = Math.max(abs(d[0]), abs(d[1]), abs(d[2]));
+    if (mx > 0.22) step = 0.22/mx;
+    let accepted = false;
+    for (let ls=0; ls<7; ls++){
+      const cand = [th[0]+d[0]*step, th[1]+d[1]*step, th[2]+d[2]*step];
+      const rr = residualAt(cand, travel, rack, null);
+      const ee = maxRes(rr);
+      if (Number.isFinite(ee) && ee < err){
+        th = cand; r = rr; err = ee; accepted = true;
+        break;
+      }
+      step *= 0.5;
+    }
+    if (!accepted) break;
+  }
+
+  // refresh stored geometry at final theta
+  residualAt(th, travel, rack, stored);
+  return {
+    th, err, iters,
+    r: stored.r, ubj: stored.ubj, lbj: stored.lbj, wc: stored.wc,
+    tre: stored.tre, rackEnd: stored.rackEnd, kt: stored.kt
+  };
+}
+
+function makePose(travel, rack, sol){
+  const kt = sol.kt;
+  const ubj = sol.ubj, lbj = sol.lbj;
+  const wc = sol.wc, tre = sol.tre, rackEnd = sol.rackEnd;
+  const axle = kt.dir(AXLE0);
+  const fwd = kt.dir(FWD0);
+  const up = kt.dir(UP0);
+  const kaxis = vnorm(vsub(ubj, lbj));
+
+  // lowest point of tire circle in the wheel plane
+  const upPlane = vnorm(vsub([0,0,1], vmul(axle, axle[2])));
+  const contact = vsub(wc, vmul(upPlane, GEO.TIRE_R));
+  const groundZ = contact[2];
+
+  const tG = (groundZ - lbj[2]) / kaxis[2];
+  const kpGround = vadd(lbj, vmul(kaxis, tG));
+
+  const camber = -Math.asin(clamp(axle[2], -1, 1))*R2D;
+  const toe = -Math.atan2(fwd[1], fwd[0])*R2D;
+  const caster = Math.atan2(-kaxis[0], kaxis[2])*R2D;
+  const kpi = Math.atan2(-kaxis[1], kaxis[2])*R2D;
+  const scrub = kpGround[1] - contact[1];
+  const trail = kpGround[0] - contact[0];
+
+  const springLo = armPoint(LS0, LCA_F, LCA_R, sol.th[1]);
+  const springLen = vdist(springLo, US0);
+
+  return {
+    travel, rack, th: sol.th.slice(), err: sol.err, iters: sol.iters,
+    ubj, lbj, wc, tre, rackEnd, kt, axle, fwd, up, kaxis,
+    contact, kpGround, camber, toe, caster, kpi, scrub, trail,
+    springLo, springHi: US0, springLen
+  };
+}
+
+function solvePose(travel, rack, seed){
+  return makePose(travel, rack, solveCorner(travel, rack, seed));
+}
+
+function computeRates(travel, rack, seed){
+  const ds = 2;
+  const tA = Math.min(TRAVEL_MAX, travel + ds);
+  const tB = Math.max(TRAVEL_MIN, travel - ds);
+  const span = tA - tB;
+  const pA = solvePose(tA, rack, seed);
+  const pB = solvePose(tB, rack, seed);
+  return {
+    camberGain: (pA.camber - pB.camber)/span*25,
+    bumpSteer: (pA.toe - pB.toe)/span*25,
+    motionRatio: -(pA.springLen - pB.springLen)/span
+  };
+}
+
+function buildSweep(rack, seed, n){
+  n = n || 81;
+  const out = [];
+  let th = seed ? seed.slice() : [0,0,0];
+  for (let i=0;i<n;i++){
+    const tr = TRAVEL_MIN + (TRAVEL_MAX-TRAVEL_MIN)*i/(n-1);
+    let sol = solveCorner(tr, rack, th);
+    if (sol.err > 1e-7){
+      const alt = solveCorner(tr, rack, [0,0,0]);
+      if (alt.err < sol.err) sol = alt;
+    }
+    th = sol.th;
+    out.push(makePose(tr, rack, sol));
+  }
+  return out;
+}
+
+const BASE_SOL = solveCorner(0, 0, [0,0,0]);
+const BASE = makePose(0, 0, BASE_SOL);
+// ============================ SOLVER CORE (END) ============================
+
+// ------------------------------ app state ------------------------------
+const state = {
+  travel: 0,
+  rack: 0,
+  sol: BASE_SOL,
+  pose: BASE,
+  base: BASE,
+  rates: {camberGain:0, bumpSteer:0, motionRatio:0},
+  sweep: [],
+  sweepRack: 0,
+  solveMs: 0,
+  sweepMs: 0,
+  lastSweepAt: 0,
+  baseRates: {camberGain:0, bumpSteer:0, motionRatio:0}
+};
+state.baseRates = computeRates(0, 0, BASE_SOL.th);
+state.sweep = buildSweep(0, BASE_SOL.th, 81);
+
+const anim = {mode:'none', t:0, rate:1};
+let showKingpin = true, showPaths = true, showLabels = true, showGrid = true;
+
+// ------------------------------ dom ------------------------------
+const $ = id => document.getElementById(id);
+const stage = $('stage');
+const ctx = stage.getContext('2d');
+const travelEl = $('travel'), rackEl = $('rack'), rateEl = $('rate');
+const chartCamber = $('chartCamber'), chartToe = $('chartToe');
+
+// ------------------------------ camera ------------------------------
+const VIEWS = {
+  iso:   {name:'ISO',   az:52, el:20, dist:2500, target:[0,470,300], ortho:false},
+  front: {name:'FRONT', az:0,  el:4,  dist:3000, target:[0,520,300], ortho:true, oh:1150},
+  side:  {name:'SIDE',  az:90, el:8,  dist:3000, target:[0,500,320], ortho:true, oh:1100},
+  top:   {name:'TOP',   az:40, el:84, dist:3000, target:[0,550,190], ortho:true, oh:1500}
+};
+let viewName = 'ISO';
+const cam = {
+  az: 52*D2R, el: 20*D2R, dist: 2500,
+  target: [0,470,300],
+  ortho: false, oh: 1150, orthoScale: 0.8,
+  pos:[0,0,0], right:[1,0,0], up:[0,0,1], fwd:[0,0,-1],
+  focal: 1000, cx:0, cy:0
+};
+const FOV = 30*D2R;
+let W = 1, H = 1, DPR = 1;
+
+function applyView(key){
+  const vw = VIEWS[key];
+  if (!vw) return;
+  cam.az = vw.az*D2R; cam.el = vw.el*D2R; cam.dist = vw.dist;
+  cam.target = vw.target.slice();
+  cam.ortho = !!vw.ortho;
+  if (vw.oh) cam.oh = vw.oh;
+  viewName = vw.name;
+  updateCamHud();
+  document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === key));
+  $('oView').textContent = vw.name;
+}
+
+function updateCamHud(){
+  let azd = (cam.az*R2D)%360; if (azd < 0) azd += 360;
+  $('oCam').textContent = 'AZ ' + Math.round(azd) + ' / EL ' + Math.round(cam.el*R2D);
+  $('oDist').textContent = cam.ortho ? (cam.oh/1000).toFixed(2) + ' m H' : (cam.dist/1000).toFixed(2) + ' m';
+  $('oProj').textContent = cam.ortho ? 'ORTHOGRAPHIC' : 'PERSPECTIVE';
+}
+
+function updateCamBasis(){
+  const ce = Math.cos(cam.el), se = Math.sin(cam.el);
+  const ca = Math.cos(cam.az), sa = Math.sin(cam.az);
+  cam.pos = [
+    cam.target[0] + cam.dist*ce*ca,
+    cam.target[1] + cam.dist*ce*sa,
+    cam.target[2] + cam.dist*se
+  ];
+  cam.fwd = vnorm(vsub(cam.target, cam.pos));
+  cam.right = vnorm(vcross(cam.fwd, [0,0,1]));
+  cam.up = vcross(cam.right, cam.fwd);
+  cam.focal = (H*0.5)/Math.tan(FOV*0.5);
+  cam.orthoScale = H/cam.oh;
+  cam.cx = W*0.5;
+  cam.cy = H*0.5;
+}
+
+function project(p){
+  const d = vsub(p, cam.pos);
+  const z = vdot(d, cam.fwd);
+  if (z < 90) return null;
+  if (cam.ortho){
+    return {
+      x: cam.cx + vdot(d, cam.right)*cam.orthoScale,
+      y: cam.cy - vdot(d, cam.up)*cam.orthoScale,
+      z
+    };
+  }
+  const f = cam.focal/z;
+  return {
+    x: cam.cx + vdot(d, cam.right)*f,
+    y: cam.cy - vdot(d, cam.up)*f,
+    z
+  };
+}
+
+// ------------------------------ canvas helpers ------------------------------
+function setLine(color, width, alpha, dash){
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.globalAlpha = alpha == null ? 1 : alpha;
+  ctx.setLineDash(dash || []);
+}
+function line3(a, b, color, width, alpha, dash){
+  const A = project(a), B = project(b);
+  if (!A || !B) return;
+  setLine(color, width == null ? 1 : width, alpha, dash);
+  ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+  ctx.globalAlpha = 1; ctx.setLineDash([]);
+}
+function polyline3(pts, color, width, alpha, dash, close, fill){
+  if (pts.length < 2) return false;
+  const pp = [];
+  for (let i=0;i<pts.length;i++){
+    const q = project(pts[i]);
+    if (!q) return false;
+    pp.push(q);
+  }
+  ctx.beginPath();
+  ctx.moveTo(pp[0].x, pp[0].y);
+  for (let i=1;i<pp.length;i++) ctx.lineTo(pp[i].x, pp[i].y);
+  if (close) ctx.closePath();
+  if (fill){
+    ctx.fillStyle = fill;
+    ctx.fill(close ? 'evenodd' : 'nonzero');
+  }
+  if (color){
+    setLine(color, width == null ? 1 : width, alpha, dash);
+    ctx.stroke();
+    ctx.globalAlpha = 1; ctx.setLineDash([]);
+  }
+  return true;
+}
+function circlePts(center, u, v, r, n){
+  n = n || 48;
+  const out = [];
+  for (let i=0;i<=n;i++){
+    const a = i/n*TAU;
+    out.push([
+      center[0] + (u[0]*Math.cos(a) + v[0]*Math.sin(a))*r,
+      center[1] + (u[1]*Math.cos(a) + v[1]*Math.sin(a))*r,
+      center[2] + (u[2]*Math.cos(a) + v[2]*Math.sin(a))*r
+    ]);
+  }
+  return out;
+}
+function strokeCircle3(center, u, v, r, color, width, alpha, dash, n){
+  polyline3(circlePts(center, u, v, r, n || 48), color, width, alpha, dash, false);
+}
+function fillPoly3(pts, fill, stroke, width, alpha){
+  if (!pts.length) return;
+  const pp = [];
+  for (const p of pts){ const q = project(p); if (!q) return; pp.push(q); }
+  ctx.beginPath();
+  ctx.moveTo(pp[0].x, pp[0].y);
+  for (let i=1;i<pp.length;i++) ctx.lineTo(pp[i].x, pp[i].y);
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.globalAlpha = alpha == null ? 1 : alpha;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  if (stroke){
+    setLine(stroke, width == null ? 1 : width, 1);
+    ctx.stroke();
+  }
+}
+function dot2(x, y, fill, stroke){
+  ctx.beginPath();
+  ctx.arc(x, y, 2.1, 0, TAU);
+  ctx.fillStyle = fill; ctx.fill();
+  if (stroke){ ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+}
+function nodeBall(p, color, r){
+  const q = project(p);
+  if (!q) return;
+  ctx.globalAlpha = 1;
+  ctx.beginPath(); ctx.arc(q.x, q.y, r || 4.2, 0, TAU);
+  ctx.strokeStyle = color; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.beginPath(); ctx.arc(q.x, q.y, 1.5, 0, TAU);
+  ctx.fillStyle = color; ctx.fill();
+}
+function nodeFixed(p, color){
+  const q = project(p);
+  if (!q) return;
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = color; ctx.lineWidth = 1;
+  ctx.strokeRect(q.x-3.5, q.y-3.5, 7, 7);
+  ctx.fillStyle = color;
+  ctx.fillRect(q.x-1.2, q.y-1.2, 2.4, 2.4);
+}
+function textBlock(text, x, y, color, align, bgAlpha, size){
+  size = size || 8.5;
+  ctx.font = size + 'px "Cascadia Mono","Consolas",monospace';
+  const tw = ctx.measureText(text).width;
+  let bx = x;
+  if (align === 'right') bx = x - tw;
+  else if (align === 'center') bx = x - tw/2;
+  const pad = 3;
+  ctx.globalAlpha = 1;
+  if (bgAlpha){
+    ctx.fillStyle = 'rgba(7,11,13,' + bgAlpha + ')';
+    ctx.fillRect(bx-pad, y-7, tw+pad*2, 13);
+  }
+  ctx.fillStyle = color;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, bx, y);
+}
+function callout(anchor, text, color, dx, dy, align, bgAlpha, size){
+  const q = project(anchor);
+  if (!q) return;
+  const tx = q.x + dx, ty = q.y + dy;
+  const ax = q.x, ay = q.y;
+  ctx.globalAlpha = 0.4;
+  ctx.strokeStyle = color; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(tx, ty); ctx.stroke();
+  ctx.globalAlpha = 0.9;
+  ctx.beginPath(); ctx.arc(ax, ay, 1.4, 0, TAU); ctx.fillStyle = color; ctx.fill();
+  ctx.globalAlpha = 1;
+  textBlock(text, tx, ty, color, align || 'left', bgAlpha == null ? 0.82 : bgAlpha, size || 9);
+}
+function fmt(v, d, signed){
+  if (!Number.isFinite(v)) return '—';
+  const s = abs(v).toFixed(d == null ? 2 : d);
+  if (signed === false) return (v<0?'−':'') + s;
+  return (v<0?'−':'+') + s;
+}
+function fmtU(v, d){ return Number.isFinite(v) ? v.toFixed(d == null ? 1 : d) : '—'; }
+
+// ------------------------------ static scene data ------------------------------
+const CHASSIS_LINES = [
+  [[190,150,100],[-210,150,100]],
+  [[85,150,520],[-115,150,520]],
+  [[190,150,100],[190,150,520]],
+  [[-210,150,100],[-210,150,520]],
+  [[85,150,520],[190,150,520]],
+  [[-210,150,520],[-115,150,520]],
+  [[190,150,100],[-115,150,520]],
+  [[-210,150,100],[85,150,520]],
+  [[85,295,425],[85,150,520]],
+  [[-105,305,450],[-115,150,520]],
+  [[-10,340,650],[85,150,520]],
+  [[-10,340,650],[-115,150,520]],
+  [[-10,340,650],[-10,150,560]],
+  [[120,290,140],[120,150,100]],
+  [[-140,300,160],[-140,150,100]],
+  [[115,150,100],[115,150,225]],
+  // rig supports
+  [[190,150,100],[190,150,FLOOR_Z]],
+  [[-210,150,100],[-210,150,FLOOR_Z]]
+];
+const CHASSIS_NODES = [
+  [190,150,100],[-210,150,100],[190,150,520],[-210,150,520],
+  [85,150,520],[-115,150,520],[-10,340,650],
+  [85,295,425],[-105,305,450],
+  [120,150,100],[-140,150,100],[115,150,225]
+];
+const RACK_R = 24, RACK_BAR_R = 11;
+const AXLE_R = 30;
+
+// ------------------------------ renderers ------------------------------
+function drawFloor(){
+  if (!showGrid) return;
+  if (cam.ortho && cam.el < 25*D2R){
+    line3([0,-220,FLOOR_Z],[0,1320,FLOOR_Z], '#223036', 1, .9, [6,6]);
+    line3([-900,0,FLOOR_Z],[900,0,FLOOR_Z], '#223036', 1, .9, [6,6]);
+    return;
+  }
+  ctx.lineWidth = 1;
+  for (let pass=0; pass<2; pass++){
+    ctx.beginPath();
+    if (pass === 0){
+      ctx.strokeStyle = '#141d22';
+      for (let x=-900;x<=900;x+=100){
+        if (x % 500 === 0) continue;
+        const A=project([x,-220,FLOOR_Z]), B=project([x,1320,FLOOR_Z]);
+        if (A&&B){ ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); }
+      }
+      for (let y=-200;y<=1300;y+=100){
+        if (y % 500 === 0) continue;
+        const A=project([-900,y,FLOOR_Z]), B=project([900,y,FLOOR_Z]);
+        if (A&&B){ ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); }
+      }
+    } else {
+      ctx.strokeStyle = '#1e2a30';
+      for (let x=-900;x<=900;x+=500){
+        const A=project([x,-220,FLOOR_Z]), B=project([x,1320,FLOOR_Z]);
+        if (A&&B){ ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); }
+      }
+      for (let y=-200;y<=1300;y+=500){
+        const A=project([-900,y,FLOOR_Z]), B=project([900,y,FLOOR_Z]);
+        if (A&&B){ ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); }
+      }
+    }
+    ctx.stroke();
+  }
+  // datum axes
+  line3([-900,0,FLOOR_Z],[900,0,FLOOR_Z], '#26333a', 1, .9, [6,6]);
+  line3([0,-220,FLOOR_Z],[0,1320,FLOOR_Z], '#26333a', 1, .9, [6,6]);
+  // floor boundary
+  polyline3([[-900,-220,FLOOR_Z],[900,-220,FLOOR_Z],[900,1320,FLOOR_Z],[-900,1320,FLOOR_Z]], '#1b262c', 1, 1, null, true);
+}
+
+function drawChassis(){
+  ctx.globalAlpha = 1;
+  for (const ln of CHASSIS_LINES){
+    const isRig = ln[1][2] === FLOOR_Z;
+    line3(ln[0], ln[1], isRig ? '#303d44' : '#44535b', 1, isRig ? .75 : .92);
+  }
+  for (const n of CHASSIS_NODES){
+    if (n[2] === FLOOR_Z) continue;
+    nodeFixed(n, '#73838c');
+  }
+  // rig base plates
+  for (const bx of [190, -210]){
+    polyline3([
+      [bx-45,105,FLOOR_Z],[bx+45,105,FLOOR_Z],[bx+45,195,FLOOR_Z],
+      [bx-45,195,FLOOR_Z],[bx-45,105,FLOOR_Z]
+    ], '#2b383f', 1, .9);
+  }
+}
+
+function drawPaths(p){
+  if (!showPaths || state.sweep.length < 3) return;
+  const sw = state.sweep;
+  const mk = (key, color, alpha, dash) => {
+    const pts = sw.map(s => s[key]);
+    polyline3(pts, color, 1, alpha, dash, false);
+  };
+  mk('ubj', '#3e9dab', .6, [2,3]);
+  mk('lbj', '#3e9dab', .6, [2,3]);
+  mk('wc', '#a9c2cc', .42, [4,4]);
+  mk('contact', '#c98a20', .62, [2,3]);
+  mk('kpGround', '#d9534a', .65, [5,5]);
+
+  // ghost kingpin axes through travel
+  if (showKingpin){
+    for (let i=0;i<sw.length;i+=10){
+      const s = sw[i];
+      const k = s.kaxis;
+      const low = vsub(s.kpGround, vmul(k, 60));
+      const high = vadd(s.ubj, vmul(k, 190));
+      line3(low, high, '#ff5d4d', 1, .22, [4,4]);
+    }
+  }
+  // path sample ticks
+  for (let i=0;i<sw.length;i+=8){
+    const s = sw[i];
+    const q1 = project(s.contact);
+    if (q1){ ctx.fillStyle = 'rgba(255,176,32,.55)'; ctx.fillRect(q1.x-1,q1.y-1,2,2); }
+    const q2 = project(s.wc);
+    if (q2){ ctx.fillStyle = 'rgba(190,214,224,.45)'; ctx.fillRect(q2.x-1,q2.y-1,2,2); }
+  }
+}
+
+function drawPad(p){
+  const c = p.contact;
+  const fwd = vnorm([p.fwd[0], p.fwd[1], 0]);
+  const side = vnorm(vcross([0,0,1], fwd));
+  const L = 215, Wd = 150;
+  const z = c[2];
+  const P = (a,b) => [c[0] + fwd[0]*a + side[0]*b, c[1] + fwd[1]*a + side[1]*b, z];
+
+  const quad = [P(-L,-Wd), P(L,-Wd), P(L,Wd), P(-L,Wd)];
+  fillPoly3(quad, 'rgba(16,23,27,0.55)', null, 0, 1);
+  polyline3(quad.concat([quad[0]]), '#3c4b54', 1, 1, null, false);
+  // pad diagonals + center lines
+  line3(P(-L,0), P(L,0), '#26343b', 1, .75, [3,5]);
+  line3(P(0,-Wd), P(0,Wd), '#26343b', 1, .75, [3,5]);
+  for (const sx of [-1,1]) for (const sy of [-1,1]){
+    line3(P(sx*L, sy*Wd), P(sx*(L-34), sy*Wd), '#4a5a63', 1, .9);
+    line3(P(sx*L, sy*Wd), P(sx*L, sy*(Wd-34)), '#4a5a63', 1, .9);
+  }
+  // contact patch
+  polyline3([P(-105,-36), P(105,-36), P(105,36), P(-105,36), P(-105,-36)],
+    'rgba(255,176,32,.5)', 1, 1);
+  line3(P(-118,0), P(118,0), 'rgba(255,176,32,.28)', 1, 1, [2,3]);
+  line3(P(0,-48), P(0,48), 'rgba(255,176,32,.28)', 1, 1, [2,3]);
+  // lift ram
+  line3(c, [c[0],c[1],FLOOR_Z], '#2a363d', 1, .85, [2,4]);
+  const base = [
+    [c[0]-55,c[1]-55,FLOOR_Z],[c[0]+55,c[1]-55,FLOOR_Z],
+    [c[0]+55,c[1]+55,FLOOR_Z],[c[0]-55,c[1]+55,FLOOR_Z]
+  ];
+  polyline3(base.concat([base[0]]), '#2a363d', 1, .7, null, false);
+
+  // travel dimension at pad edge
+  const dimP = vadd(c, vmul(side, Wd + 62));
+  const dA = [dimP[0], dimP[1], 0], dB = [dimP[0], dimP[1], z];
+  line3(dA, dB, '#a87a20', 1, .9, [3,3]);
+  line3(vadd(dA, vmul(fwd, -22)), vadd(dA, vmul(fwd, 22)), '#a87a20', 1, .9);
+  line3(vadd(dB, vmul(fwd, -22)), vadd(dB, vmul(fwd, 22)), '#a87a20', 1, .9);
+  const anchor = [dimP[0], dimP[1], z*0.5];
+  callout(anchor, 'TRAVEL ' + fmt(state.travel,1,true) + ' mm', '#d2a24a', 16, 0, 'left', .8, 9);
+}
+
+function drawWheel(p){
+  const A = p.axle, F = p.fwd, U = p.up;
+  const wc = p.wc;
+  const HW = GEO.WHEEL_HALF;
+  const outC = vadd(wc, vmul(A, HW));
+  const inC = vsub(wc, vmul(A, HW));
+  const faceC = vadd(wc, vmul(A, HW*0.68));
+  const discC = vsub(wc, vmul(A, 42));
+
+  // tire sidewall ring fill (outboard)
+  const ringOut = circlePts(outC, F, U, GEO.TIRE_R, 64);
+  const ringIn = circlePts(outC, F, U, GEO.RIM_R + 8, 64);
+  const okA = ringOut.every(pp => project(pp)) && ringIn.every(pp => project(pp));
+  if (okA){
+    const a = ringOut.map(project), b = ringIn.map(project);
+    ctx.beginPath();
+    ctx.moveTo(a[0].x,a[0].y);
+    for (let i=1;i<a.length;i++) ctx.lineTo(a[i].x,a[i].y);
+    ctx.closePath();
+    ctx.moveTo(b[0].x,b[0].y);
+    for (let i=1;i<b.length;i++) ctx.lineTo(b[i].x,b[i].y);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(14,19,23,0.6)';
+    ctx.fill('evenodd');
+  }
+
+  // tire circles
+  strokeCircle3(outC, F, U, GEO.TIRE_R, '#59666e', 1.1, .95, null, 64);
+  strokeCircle3(inC, F, U, GEO.TIRE_R, '#46535b', 1, .8, null, 48);
+  strokeCircle3(outC, F, U, 252, '#2f3b42', 1, .7, null, 48);
+
+  // tread connectors
+  for (let i=0;i<24;i++){
+    const a = i/24*TAU;
+    const dirU = vadd(vmul(F, Math.cos(a)), vmul(U, Math.sin(a)));
+    line3(vadd(outC, vmul(dirU, GEO.TIRE_R)), vadd(inC, vmul(dirU, GEO.TIRE_R)),
+      '#48555d', 1, .8);
+  }
+
+  // rim
+  strokeCircle3(faceC, F, U, GEO.RIM_R, '#77868f', 1.3, 1, null, 48);
+  strokeCircle3(vsub(outC, vmul(A, 10)), F, U, GEO.RIM_R, '#5d6b73', 1, .8, null, 48);
+  strokeCircle3(vadd(inC, vmul(A, 16)), F, U, GEO.RIM_R, '#4b585f', 1, .7, null, 40);
+  for (let i=0;i<10;i++){
+    const a = i/10*TAU + 0.16;
+    const dirU = vadd(vmul(F, Math.cos(a)), vmul(U, Math.sin(a)));
+    line3(vadd(vsub(outC, vmul(A, 10)), vmul(dirU, GEO.RIM_R)),
+      vadd(vadd(inC, vmul(A, 16)), vmul(dirU, GEO.RIM_R)), '#3f4c53', 1, .65);
+  }
+
+  // spokes (5 twin tapered)
+  for (let k=0;k<5;k++){
+    const a = k/5*TAU + 0.31;
+    const dir = vadd(vmul(F, Math.cos(a)), vmul(U, Math.sin(a)));
+    const per = vadd(vmul(F, -Math.sin(a)), vmul(U, Math.cos(a)));
+    const q1 = vadd(faceC, vadd(vmul(dir, 64), vmul(per, 6)));
+    const q2 = vadd(faceC, vadd(vmul(dir, 214), vmul(per, 15)));
+    const q3 = vadd(faceC, vadd(vmul(dir, 214), vmul(per, -15)));
+    const q4 = vadd(faceC, vadd(vmul(dir, 64), vmul(per, -6)));
+    fillPoly3([q1,q2,q3,q4], 'rgba(150,168,177,0.08)', '#78878f', 1, 1);
+    line3(q1,q4, '#5f6d75', 1, .7);
+  }
+
+  // hub face
+  strokeCircle3(faceC, F, U, 70, '#7f8e97', 1.1, .95, null, 36);
+  strokeCircle3(vadd(faceC, vmul(A, 9)), F, U, 37, '#9aabb3', 1, .9, null, 28);
+  for (let i=0;i<5;i++){
+    const a = i/5*TAU + 0.55;
+    const c = vadd(vadd(faceC, vmul(A, 10)), vadd(vmul(F, Math.cos(a)*51), vmul(U, Math.sin(a)*51)));
+    strokeCircle3(c, F, U, 6, '#818f97', 1, .75, null, 10);
+  }
+
+  // brake disc
+  strokeCircle3(discC, F, U, 170, '#4e5b63', 1, .85, null, 48);
+  strokeCircle3(discC, F, U, 112, '#424e55', 1, .75, null, 36);
+  for (let i=0;i<8;i++){
+    const a = i/8*TAU + 0.12;
+    const dir = vadd(vmul(F, Math.cos(a)), vmul(U, Math.sin(a)));
+    line3(vadd(discC, vmul(dir, 118)), vadd(discC, vmul(dir, 165)), '#3c484f', 1, .65);
+  }
+
+  // caliper straddling disc, at rear-upper of wheel
+  const aC = 136*D2R;
+  const radial = vadd(vmul(F, Math.cos(aC)), vmul(U, Math.sin(aC)));
+  const tangent = vadd(vmul(F, -Math.sin(aC)), vmul(U, Math.cos(aC)));
+  const calC = vadd(discC, vmul(radial, 158));
+  const corners = [];
+  for (const sr of [-1,1]) for (const st of [-1,1]) for (const sa of [-1,1]){
+    corners.push(vadd(calC,
+      vadd(vadd(vmul(radial, sr*58), vmul(tangent, st*48)), vmul(A, sa*44))));
+  }
+  const edge = (i,j) => line3(corners[i], corners[j], '#93a0a8', 1, .8);
+  for (let i=0;i<8;i++){
+    for (const bit of [1,2,4]) if (!(i & bit)) edge(i, i | bit);
+  }
+  line3(calC, vadd(calC, vmul(tangent, 46)), '#5f6c74', 1, .7);
+
+  // wheel center crosshair
+  const wq = project(wc);
+  if (wq){
+    ctx.globalAlpha = .85;
+    ctx.strokeStyle = '#d6e3e9'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(wq.x-5, wq.y); ctx.lineTo(wq.x+5, wq.y);
+    ctx.moveTo(wq.x, wq.y-5); ctx.lineTo(wq.x, wq.y+5);
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(wq.x,wq.y,7,0,TAU);
+    ctx.strokeStyle = 'rgba(214,227,233,.35)'; ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawRack(p){
+  const x = RACK0[0], z = RACK0[2];
+  // ghost at zero rack
+  if (abs(p.rack) > 0.05){
+    const g = [x, RACK0[1], z];
+    nodeBall(g, '#6f7e86', 3.4);
+    line3(g, p.rackEnd, '#6f7e86', 1, .55, [2,3]);
+  }
+  // housing
+  const y0 = 8, y1 = 232;
+  const ring = (y, r, col, al) => strokeCircle3([x,y,z], [1,0,0], [0,0,1], r, col, 1, al, null, 28);
+  for (const yy of [y0, 70, 150, y1]){
+    ring(yy, RACK_R, yy===y1 ? '#7c8b94' : '#5d6b73', .9);
+  }
+  for (let i=0;i<4;i++){
+    const a = i/4*TAU + PI/4;
+    const off = [Math.cos(a)*RACK_R, 0, Math.sin(a)*RACK_R];
+    line3([x+off[0], y0, z+off[2]], [x+off[0], y1, z+off[2]], '#5d6b73', 1, .8);
+  }
+  // pinion tower
+  line3([x, 88, z-RACK_R], [x, 88, z+76], '#67767f', 1, .9);
+  strokeCircle3([x, 88, z+40], [1,0,0], [0,1,0], 30, '#5b6971', 1, .75, null, 28);
+  strokeCircle3([x, 88, z+76], [1,0,0], [0,1,0], 22, '#6d7c85', 1, .8, null, 24);
+  // bar to moving rack end
+  const barEndY = p.rackEnd[1];
+  if (barEndY > y1){
+    const midY = (y1 + barEndY)/2;
+    strokeCircle3([x, midY, z], [1,0,0], [0,0,1], RACK_BAR_R, '#7e8d95', 1, .85, null, 24);
+    line3([x, y1, z-RACK_BAR_R], [x, barEndY, z-RACK_BAR_R], '#7e8d95', 1, .85);
+    line3([x, y1, z+RACK_BAR_R], [x, barEndY, z+RACK_BAR_R], '#7e8d95', 1, .85);
+  }
+  strokeCircle3(p.rackEnd, [1,0,0], [0,1,0], 17, '#9baab2', 1, .9, null, 24);
+}
+
+function armLeg(a, b, outer, color){
+  line3(a, outer, color, 1.9, .98);
+  line3(b, outer, color, 1.9, .98);
+  line3(a, b, color, 1, .5, [4,3]);
+  // pivot-axis extension
+  const ax = armAxisDir(a,b);
+  line3(vsub(a, vmul(ax, 26)), vadd(b, vmul(ax, 26)), '#5e6d76', 1, .7, [7,2,1.5,2]);
+}
+function drawArms(p){
+  // UCA
+  fillPoly3([UCA_F, UCA_R, p.ubj], 'rgba(190,208,218,0.035)', null, 0, 1);
+  armLeg(UCA_F, UCA_R, p.ubj, '#c9d6dd');
+  // LCA
+  fillPoly3([LCA_F, LCA_R, p.lbj], 'rgba(190,208,218,0.03)', null, 0, 1);
+  armLeg(LCA_F, LCA_R, p.lbj, '#c9d6dd');
+  // lower spring bracket
+  line3(p.springLo, vlerp(p.springLo, p.lbj, 0.32), '#8a99a2', 1, .8);
+  line3(p.springLo, vlerp(p.springLo, vlerp(LCA_F, LCA_R, .5), 0.22), '#8a99a2', 1, .8);
+}
+
+function drawKnuckle(p){
+  const kt = p.kt;
+  const hubIn = kt.point(vadd(WC0, vmul(AXLE0, -70)));
+  const hub = kt.point(WC0);
+  const P = [p.ubj, hubIn, p.lbj];
+  const Q = [p.lbj, hubIn, p.tre];
+  fillPoly3(P, 'rgba(200,216,224,0.07)', null, 0, 1);
+  fillPoly3(Q, 'rgba(200,216,224,0.06)', null, 0, 1);
+  // outline
+  line3(p.ubj, hubIn, '#d4e0e6', 1.8, 1);
+  line3(hubIn, p.lbj, '#d4e0e6', 1.8, 1);
+  line3(p.ubj, p.lbj, '#d4e0e6', 1.6, .85);
+  line3(p.lbj, p.tre, '#d4e0e6', 1.8, 1);
+  line3(hubIn, p.tre, '#bcc9d1', 1, .65);
+  // spindle
+  line3(hubIn, hub, '#a9b8c0', 3.4, .9);
+  strokeCircle3(hubIn, kt.dir(FWD0), kt.dir(UP0), 34, '#a9b8c0', 1, .8, null, 24);
+  strokeCircle3(hubIn, kt.dir(FWD0), kt.dir(UP0), 52, '#77868f', 1, .6, null, 28);
+}
+
+function drawCoilover(p){
+  const lo = p.springLo, hi = p.springHi;
+  const L = vdist(lo, hi);
+  const n = vnorm(vsub(hi, lo));
+  let ref = [0,0,1];
+  if (abs(vdot(n, ref)) > 0.94) ref = [1,0,0];
+  const u = vnorm(vcross(n, ref));
+  const w = vnorm(vcross(n, u));
+  const seat = 18, r = 47;
+
+  // spring seats
+  strokeCircle3(vadd(lo, vmul(n, seat)), u, w, r+7, '#7c8b94', 1, .8, null, 32);
+  strokeCircle3(vsub(hi, vmul(n, seat)), u, w, r+7, '#7c8b94', 1, .8, null, 32);
+  for (let i=0;i<8;i++){
+    const a=i/8*TAU;
+    const pt = vadd(vmul(u,Math.cos(a)), vmul(w,Math.sin(a)));
+    line3(vadd(vadd(lo, vmul(n,seat)), vmul(pt,r)), vadd(vadd(lo, vmul(n,seat)), vmul(pt,r+8)), '#65747d',1,.55);
+    line3(vadd(vsub(hi, vmul(n,seat)), vmul(pt,r)), vadd(vsub(hi, vmul(n,seat)), vmul(pt,r+8)), '#65747d',1,.55);
+  }
+
+  // deformable helix — pitch changes with length
+  const coils = 12, per = 20, pts = [];
+  const span = L - seat*2;
+  for (let i=0;i<=coils*per;i++){
+    const t = i/(coils*per);
+    const a = t*coils*TAU;
+    const c = vadd(vadd(lo, vmul(n, seat + t*span)),
+      vadd(vmul(u, Math.cos(a)*r), vmul(w, Math.sin(a)*r)));
+    pts.push(c);
+  }
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  polyline3(pts, '#ffb020', 1.5, .98, null, false);
+  ctx.lineJoin = 'miter'; ctx.lineCap = 'butt';
+
+  // damper body
+  const bodyLo = vadd(lo, vmul(n, 14));
+  const bodyHi = vadd(lo, vmul(n, L*0.54));
+  const br = 17;
+  strokeCircle3(bodyLo, u, w, br, '#7b8992', 1, .8, null, 24);
+  strokeCircle3(bodyHi, u, w, br, '#7b8992', 1, .8, null, 24);
+  for (let i=0;i<4;i++){
+    const a=i/4*TAU + PI/4;
+    const pt = vadd(vmul(u,Math.cos(a)*br), vmul(w,Math.sin(a)*br));
+    line3(vadd(bodyLo,pt), vadd(bodyHi,pt), '#7b8992', 1, .7);
+  }
+  // piston rod
+  const rodTop = vsub(hi, vmul(n, 16));
+  line3(vadd(bodyHi, vmul(u, 6)), vadd(rodTop, vmul(u, 6)), '#b7c4cb', 1.4, .9);
+  line3(vadd(bodyHi, vmul(u, -6)), vadd(rodTop, vmul(u, -6)), '#b7c4cb', 1.4, .9);
+  // eyes
+  strokeCircle3(lo, u, w, 11, '#c9d6dd', 1, .9, null, 18);
+  strokeCircle3(hi, u, w, 11, '#c9d6dd', 1, .9, null, 18);
+}
+
+function drawKingpin(p){
+  if (!showKingpin) return;
+  const k = p.kaxis;
+  const low = vsub(p.kpGround, vmul(k, 70));
+  const high = vadd(p.ubj, vmul(k, 210));
+  line3(low, high, '#ff5d4d', 1.5, .9, [8,4]);
+  // axis caps
+  const capDir = vnorm(vcross(k, [0,1,0]));
+  line3(vadd(high, vmul(capDir, -22)), vadd(high, vmul(capDir, 22)), '#ff5d4d', 1, .8);
+  // ground target
+  const g = project(p.kpGround);
+  if (g){
+    ctx.strokeStyle = 'rgba(255,93,77,.95)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(g.x, g.y, 4.5, 0, TAU); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(g.x-8,g.y); ctx.lineTo(g.x-3,g.y);
+    ctx.moveTo(g.x+3,g.y); ctx.lineTo(g.x+8,g.y);
+    ctx.moveTo(g.x,g.y-8); ctx.lineTo(g.x,g.y-3);
+    ctx.moveTo(g.x,g.y+3); ctx.lineTo(g.x,g.y+8);
+    ctx.stroke();
+  }
+  // scrub line
+  line3(p.kpGround, p.contact, 'rgba(255,93,77,.65)', 1, 1, [3,3]);
+  const mid = vlerp(p.kpGround, p.contact, .5);
+  callout(mid, 'SCRUB ' + fmt(p.scrub,1,true) + ' mm', '#ff7a6b', 14, 24, 'left', .82, 8.5);
+}
+
+function drawNodes(p){
+  for (const n of [UCA_F, UCA_R, LCA_F, LCA_R]) nodeFixed(n, '#a4b2ba');
+  nodeBall(p.springHi, '#ffb020', 4);
+  nodeBall(p.springLo, '#ffb020', 4);
+  nodeBall(p.ubj, '#ead9a4', 4.4);
+  nodeBall(p.lbj, '#ead9a4', 4.4);
+  nodeBall(p.tre, '#dbe7ed', 4.2);
+  nodeBall(p.rackEnd, '#dbe7ed', 4.2);
+  const q = project(p.contact);
+  if (q){ ctx.strokeStyle='rgba(255,176,32,.9)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.arc(q.x,q.y,3,0,TAU); ctx.stroke(); }
+}
+
+function drawLabels(p){
+  if (!showLabels) return;
+  const ucaMid = vlerp(UCA_F, p.ubj, .55);
+  const lcaMid = vlerp(LCA_R, p.lbj, .55);
+  const knuckMid = vlerp(vlerp(p.ubj, p.lbj, .45), vlerp(p.lbj, p.tre, .5), .5);
+  const springMid = vlerp(p.springLo, p.springHi, .52);
+  const tieMid = vlerp(p.rackEnd, p.tre, .5);
+  const rackMid = [RACK0[0], 130, RACK0[2]];
+  const kpTop = vadd(p.ubj, vmul(p.kaxis, 235));
+  const chassisTop = [-10, 300, 620];
+
+  callout(ucaMid, 'UPPER A-ARM', '#b9c8d0', -18, -26, 'right', .8);
+  callout(lcaMid, 'LOWER A-ARM', '#b9c8d0', -22, 26, 'right', .8);
+  callout(knuckMid, 'UPRIGHT / KNUCKLE', '#cddae1', 26, 12, 'left', .8);
+  callout(springMid, 'COIL-OVER', '#ffcf6c', -26, -6, 'right', .8);
+  callout(tieMid, 'TIE ROD', '#d5e2e8', 20, 24, 'left', .8);
+  callout(rackMid, 'STEERING RACK', '#98a7b0', -18, 28, 'right', .8);
+  callout(kpTop, 'KINGPIN AXIS', '#ff7a6b', 22, -16, 'left', .8);
+  callout(chassisTop, 'CHASSIS REF / FIXED', '#8c9ba4', -30, -18, 'right', .8);
+
+  // joint IDs
+  callout(p.ubj, 'UBJ', '#8e9ca5', 13, -12, 'left', .7, 7.5);
+  callout(p.lbj, 'LBJ', '#8e9ca5', 13, 13, 'left', .7, 7.5);
+  callout(p.tre, 'TRE', '#8e9ca5', 12, 15, 'left', .7, 7.5);
+  callout(p.rackEnd, 'RCK', '#8e9ca5', -12, 15, 'right', .7, 7.5);
+}
+
+function drawGizmo(){
+  const bx = W - 78, by = H - 82, s = 24;
+  const ox = bx + 32, oy = by + 47;
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = 'rgba(7,11,13,.82)';
+  ctx.fillRect(bx, by, 70, 72);
+  ctx.strokeStyle = '#1d282e'; ctx.lineWidth = 1;
+  ctx.strokeRect(bx+.5, by+.5, 69, 71);
+  ctx.font = '7px "Cascadia Mono",monospace';
+  ctx.fillStyle = '#4f5e67'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('AXIS', bx+6, by+5);
+
+  const axes = [
+    {v:[1,0,0], c:'#ffb020', l:'X'},
+    {v:[0,1,0], c:'#42c2d4', l:'Y'},
+    {v:[0,0,1], c:'#cfdae1', l:'Z'}
+  ];
+  for (const ax of axes){
+    const dx = vdot(ax.v, cam.right)*s;
+    const dy = -vdot(ax.v, cam.up)*s;
+    ctx.strokeStyle = ax.c; ctx.lineWidth = 1.3;
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ox+dx, oy+dy); ctx.stroke();
+    ctx.fillStyle = ax.c;
+    ctx.font = '8px "Cascadia Mono",monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(ax.l, ox+dx*1.28, oy+dy*1.28);
+  }
+  ctx.strokeStyle = '#36434b'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(ox, oy, 2, 0, TAU); ctx.stroke();
+}
+
+// ------------------------------ render ------------------------------
+function render(){
+  updateCamBasis();
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#080c0f';
+  ctx.fillRect(0,0,W,H);
+  ctx.lineCap = 'butt';
+  ctx.lineJoin = 'miter';
+
+  const p = state.pose;
+  drawFloor();
+  drawPaths(p);
+  drawChassis();
+  drawPad(p);
+  drawWheel(p);
+  drawRack(p);
+  drawArms(p);
+  drawKnuckle(p);
+  drawCoilover(p);
+  drawNodes(p);
+  drawKingpin(p);
+  drawLabels(p);
+  drawGizmo();
+}
+
+// ------------------------------ charts ------------------------------
+let chartSizes = {c1:[0,0], c2:[0,0]};
+function drawPlot(cv, cacheKey, key, color, cur, unit){
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (w < 20 || h < 20) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  if (cv.width !== Math.round(w*dpr) || cv.height !== Math.round(h*dpr)){
+    cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
+  }
+  const c = cv.getContext('2d');
+  c.setTransform(dpr,0,0,dpr,0,0);
+  c.clearRect(0,0,w,h);
+  const L = 35, R = 7, T = 8, B = 14;
+  const pw = w - L - R, ph = h - T - B;
+  const sw = state.sweep;
+  if (!sw.length) return;
+  const vals = sw.map(s => s[key]);
+  let lo = Math.min(...vals, 0), hi = Math.max(...vals, 0);
+  if (hi - lo < 0.4){ const m = (hi+lo)/2; lo = m-0.2; hi = m+0.2; }
+  const pad = (hi-lo)*0.14; lo -= pad; hi += pad;
+  const X = t => L + (t - TRAVEL_MIN)/(TRAVEL_MAX-TRAVEL_MIN)*pw;
+  const Y = v => T + (hi - v)/(hi - lo)*ph;
+
+  // frame + grid
+  c.strokeStyle = '#182227'; c.lineWidth = 1;
+  c.strokeRect(L+.5, T+.5, pw-1, ph-1);
+  c.strokeStyle = '#111a1e';
+  c.beginPath();
+  for (let t=TRAVEL_MIN; t<=TRAVEL_MAX; t+=40){
+    const x = Math.round(X(t))+.5;
+    c.moveTo(x, T); c.lineTo(x, T+ph);
+  }
+  c.stroke();
+  if (lo < 0 && hi > 0){
+    c.strokeStyle = '#223037'; c.setLineDash([2,3]);
+    c.beginPath(); c.moveTo(L, Y(0)); c.lineTo(L+pw, Y(0)); c.stroke();
+    c.setLineDash([]);
+  }
+  // labels
+  c.font = '7px "Cascadia Mono","Consolas",monospace';
+  c.fillStyle = '#4d5b64';
+  c.textAlign = 'right'; c.textBaseline = 'middle';
+  c.fillText(hi.toFixed(2), L-4, T+3);
+  c.fillText(lo.toFixed(2), L-4, T+ph-3);
+  c.textBaseline = 'top';
+  c.fillStyle = '#414e56';
+  c.textAlign = 'left';  c.fillText('−80', L, T+ph+3);
+  c.textAlign = 'center'; c.fillText('0', X(0), T+ph+3);
+  c.textAlign = 'right';  c.fillText('+80', L+pw, T+ph+3);
+
+  // curve
+  c.strokeStyle = color; c.lineWidth = 1.3;
+  c.beginPath();
+  for (let i=0;i<sw.length;i++){
+    const s = sw[i], x = X(s.travel), y = Y(s[key]);
+    if (i===0) c.moveTo(x,y); else c.lineTo(x,y);
+  }
+  c.stroke();
+
+  // current marker
+  if (cur){
+    const x = X(cur.travel), y = Y(cur[key]);
+    c.strokeStyle = 'rgba(255,255,255,.16)';
+    c.setLineDash([2,3]);
+    c.beginPath(); c.moveTo(x,T); c.lineTo(x,T+ph); c.stroke();
+    c.setLineDash([]);
+    c.fillStyle = color;
+    c.fillRect(x-2.5, y-2.5, 5, 5);
+  }
+  // unit hint
+  c.fillStyle = '#3d4a52'; c.textAlign = 'left'; c.textBaseline = 'top';
+  c.fillText(unit, L+3, T+3);
+}
+
+function drawCharts(){
+  drawPlot(chartCamber, 'c1', 'camber', '#42c2d4', state.pose, 'deg');
+  drawPlot(chartToe, 'c2', 'toe', '#ffb020', state.pose, 'deg');
+  $('camNow').textContent = fmt(state.pose.camber, 2, true) + '°';
+  $('toeNow').textContent = fmt(state.pose.toe, 2, true) + '°';
+}
+
+// ------------------------------ ui update ------------------------------
+function updateReadouts(){
+  const p = state.pose, b = state.base, rt = state.rates;
+  $('travelVal').textContent = fmt(p.travel, 1, true);
+  $('rackVal').textContent = fmt(p.rack, 1, true);
+  travelEl.value = p.travel;
+  rackEl.value = p.rack;
+
+  $('vCamber').textContent = fmt(p.camber,2,true) + '°';
+  $('vToe').textContent = fmt(p.toe,2,true) + '°';
+  $('vCaster').textContent = fmt(p.caster,2,true) + '°';
+  $('vKpi').textContent = fmt(p.kpi,2,true) + '°';
+  $('vScrub').textContent = fmt(p.scrub,1,true) + ' mm';
+  $('vTrail').textContent = fmt(p.trail,1,true) + ' mm';
+  $('vSpring').textContent = fmtU(p.springLen,1) + ' mm';
+  $('vMr').textContent = fmtU(rt.motionRatio,3);
+  $('vTrack').textContent = fmt(p.contact[1]-b.contact[1],1,true) + ' mm';
+  $('vCamGain').textContent = fmt(rt.camberGain,2,true) + '°/25';
+  $('vBumpSteer').textContent = fmt(rt.bumpSteer,3,true) + '°/25';
+
+  $('dCamber').textContent = fmt(p.camber-b.camber,2,true);
+  $('dToe').textContent = fmt(p.toe-b.toe,2,true);
+  $('dCaster').textContent = fmt(p.caster-b.caster,2,true);
+  $('dKpi').textContent = fmt(p.kpi-b.kpi,2,true);
+  $('dScrub').textContent = fmt(p.scrub-b.scrub,1,true);
+  $('dTrail').textContent = fmt(p.trail-b.trail,1,true);
+  $('dSpring').textContent = fmt(p.springLen-b.springLen,1,true);
+  $('dMr').textContent = fmt(rt.motionRatio - state.baseRates.motionRatio,3,true);
+  $('dTrack').textContent = '—';
+
+  $('dgIter').textContent = String(state.sol.iters);
+  $('dgRes').textContent = state.sol.err.toExponential(1).replace('e+','e');
+  $('dgMs').textContent = state.solveMs.toFixed(2) + ' ms';
+  $('dgSweep').textContent = state.sweepMs.toFixed(1) + ' ms';
+  const ok = state.sol.err < 1e-5;
+  const st = $('dgStatus');
+  st.textContent = ok ? 'CONVERGED' : 'RESIDUAL HIGH';
+  st.className = ok ? 'ok' : 'warn';
+
+  $('camNow').textContent = fmt(p.camber, 2, true) + '°';
+  $('toeNow').textContent = fmt(p.toe, 2, true) + '°';
+}
+
+function rebuildSweep(){
+  const t0 = performance.now();
+  state.sweep = buildSweep(state.rack, state.sol.th, 81);
+  state.sweepRack = state.rack;
+  state.sweepMs = performance.now() - t0;
+  state.lastSweepAt = performance.now();
+}
+
+function commit(urgent){
+  const t0 = performance.now();
+  const seed = state.sol ? state.sol.th : BASE_SOL.th;
+  const sol = solveCorner(state.travel, state.rack, seed);
+  state.sol = sol;
+  state.pose = makePose(state.travel, state.rack, sol);
+  state.rates = computeRates(state.travel, state.rack, sol.th);
+  state.solveMs = performance.now() - t0;
+
+  const needSweep = urgent || !state.sweep.length || abs(state.rack - state.sweepRack) > 0.05;
+  const now = performance.now();
+  if (needSweep && (urgent || !anim.mode || now - state.lastSweepAt > 90)){
+    rebuildSweep();
+  }
+  updateReadouts();
+  drawCharts();
+}
+
+// ------------------------------ camera controls ------------------------------
+let drag = null;
+function markCustomView(){
+  if (viewName !== 'ORBIT'){
+    viewName = 'ORBIT';
+    document.querySelectorAll('[data-view]').forEach(b => b.classList.remove('active'));
+    $('oView').textContent = 'ORBIT';
+  }
+}
+stage.addEventListener('pointerdown', e => {
+  stage.setPointerCapture(e.pointerId);
+  drag = {
+    x:e.clientX, y:e.clientY, button:e.button,
+    pan: e.button === 2 || e.shiftKey
+  };
+  stage.classList.add('dragging');
+});
+stage.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  drag.x = e.clientX; drag.y = e.clientY;
+  if (dx || dy) markCustomView();
+  if (drag.pan){
+    const k = cam.ortho ? 1/cam.orthoScale : cam.dist/cam.focal;
+    cam.target = vadd(cam.target, vadd(vmul(cam.right, -dx*k), vmul(cam.up, dy*k)));
+  } else {
+    cam.az -= dx*0.0052;
+    cam.el = clamp(cam.el + dy*0.0042, -6*D2R, 88*D2R);
+  }
+  updateCamHud();
+});
+function endDrag(){ drag = null; stage.classList.remove('dragging'); }
+stage.addEventListener('pointerup', endDrag);
+stage.addEventListener('pointercancel', endDrag);
+stage.addEventListener('contextmenu', e => e.preventDefault());
+stage.addEventListener('wheel', e => {
+  e.preventDefault();
+  const f = Math.exp(e.deltaY*0.0012);
+  if (cam.ortho){
+    cam.oh = clamp(cam.oh*f, 700, 3200);
+  } else {
+    cam.dist = clamp(cam.dist*f, 1400, 6200);
+  }
+  markCustomView();
+  updateCamHud();
+}, {passive:false});
+
+document.querySelectorAll('[data-view]').forEach(btn => {
+  btn.addEventListener('click', () => { applyView(btn.dataset.view); render(); });
+});
+
+// ------------------------------ input wiring ------------------------------
+function stopAnim(silent){
+  anim.mode = 'none';
+  document.querySelectorAll('[data-anim]').forEach(b => b.classList.remove('active'));
+  if (!silent) commit(true);
+}
+function startAnim(mode){
+  stopAnim(true);
+  anim.mode = mode;
+  anim.t = 0;
+  if (mode === 'bump'){
+    anim.t = Math.asin(clamp(state.travel/62, -1, 1)) / 1.15;
+  } else if (mode === 'steer'){
+    anim.t = Math.asin(clamp(state.rack/46, -1, 1)) / 1.0;
+  } else {
+    state.travel = 0; state.rack = 0;
+    commit(true);
+  }
+  document.querySelectorAll('[data-anim]').forEach(b => {
+    b.classList.toggle('active', b.dataset.anim === mode);
+  });
+}
+document.querySelectorAll('[data-anim]').forEach(btn => {
+  btn.addEventListener('click', () => startAnim(btn.dataset.anim));
+});
+$('stopAnim').addEventListener('click', () => stopAnim(false));
+
+travelEl.addEventListener('input', () => {
+  stopAnim(true);
+  state.travel = parseFloat(travelEl.value);
+  commit(true); render();
+});
+rackEl.addEventListener('input', () => {
+  stopAnim(true);
+  state.rack = parseFloat(rackEl.value);
+  commit(true); render();
+});
+$('zeroTravel').addEventListener('click', () => {
+  stopAnim(true); state.travel = 0; commit(true); render();
+});
+$('zeroRack').addEventListener('click', () => {
+  stopAnim(true); state.rack = 0; commit(true); render();
+});
+$('resetPose').addEventListener('click', () => {
+  stopAnim(true);
+  state.travel = 0; state.rack = 0;
+  state.sol = solveCorner(0, 0, [0,0,0]);
+  commit(true); render();
+});
+rateEl.addEventListener('input', () => {
+  anim.rate = parseFloat(rateEl.value);
+  $('rateVal').textContent = anim.rate.toFixed(2) + '×';
+});
+
+$('togKingpin').addEventListener('change', e => { showKingpin = e.target.checked; render(); });
+$('togPaths').addEventListener('change', e => { showPaths = e.target.checked; render(); });
+$('togLabels').addEventListener('change', e => { showLabels = e.target.checked; render(); });
+$('togGrid').addEventListener('change', e => { showGrid = e.target.checked; render(); });
+
+window.addEventListener('keydown', e => {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+  if (e.code === 'Space'){
+    e.preventDefault();
+    if (anim.mode === 'none') startAnim('bump'); else stopAnim(false);
+  } else if (e.key === 'r' || e.key === 'R'){
+    stopAnim(true);
+    state.travel = 0; state.rack = 0;
+    state.sol = solveCorner(0,0,[0,0,0]);
+    applyView('iso');
+    commit(true);
+    render();
+  } else if (e.key >= '1' && e.key <= '4'){
+    applyView(['iso','front','side','top'][parseInt(e.key,10)-1]);
+  }
+});
+
+// ------------------------------ resize ------------------------------
+function resizeCanvas(){
+  const r = stage.getBoundingClientRect();
+  W = Math.max(2, r.width); H = Math.max(2, r.height);
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  stage.width = Math.round(W*DPR);
+  stage.height = Math.round(H*DPR);
+  chartSizes.c1 = [chartCamber.clientWidth, chartCamber.clientHeight];
+  chartSizes.c2 = [chartToe.clientWidth, chartToe.clientHeight];
+  drawCharts();
+}
+const ro = new ResizeObserver(resizeCanvas);
+ro.observe(stage.parentElement);
+window.addEventListener('resize', resizeCanvas);
+
+// ------------------------------ animation loop ------------------------------
+let lastT = performance.now();
+let fpsFrames = 0, fpsTime = performance.now();
+let hudTime = 0;
+
+function loop(now){
+  const dt = Math.min(0.05, (now - lastT)/1000);
+  lastT = now;
+
+  if (anim.mode !== 'none'){
+    anim.t += dt*anim.rate;
+    if (anim.mode === 'bump'){
+      state.travel = 62*Math.sin(anim.t*1.15);
+    } else if (anim.mode === 'steer'){
+      state.rack = 46*Math.sin(anim.t*1.0);
+    } else {
+      state.travel = 55*Math.sin(anim.t*0.85);
+      state.rack = 40*Math.sin(anim.t*0.50);
+    }
+    commit(false);
+  }
+
+  try { render(); }
+  catch (err) { console.error('DWK-2 render error', err); }
+
+  fpsFrames++;
+  if (now - fpsTime > 500){
+    $('fps').textContent = String(Math.round(fpsFrames*1000/(now-fpsTime)));
+    fpsFrames = 0; fpsTime = now;
+  }
+  if (now - hudTime > 120){
+    hudTime = now;
+    updateCamHud();
+  }
+  requestAnimationFrame(loop);
+}
+
+// ------------------------------ boot ------------------------------
+applyView('iso');
+resizeCanvas();
+commit(true);
+$('rateVal').textContent = '1.00×';
+render();
+requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
